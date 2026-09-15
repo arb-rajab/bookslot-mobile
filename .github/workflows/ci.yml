@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: dart format --output=none --set-exit-if-changed lib test integration_test
+
+      - run: flutter analyze
+
+      - run: flutter test --coverage
+
+      # integration_test/ needs a booted emulator/simulator or a connected
+      # device and is not runnable on a plain ubuntu-latest runner — see
+      # that file's own docblock and docs/project-memory/07-testing-strategy.md
+      # for why it's excluded here rather than silently skipped.
