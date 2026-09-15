@@ -150,5 +150,63 @@ void main() {
       expect(status.status, 'confirmed');
       expect(status.startsAt, DateTime.utc(2026, 1, 1, 10));
     });
+
+    test(
+      'cancelBooking posts to the token-based cancel endpoint and parses the '
+      'updated status',
+      () async {
+        final mock = MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/bookings/manage/some-token/cancel');
+          return http.Response(
+            jsonEncode({
+              'appointment_id': 'apt-1',
+              'status': 'cancelled',
+              'starts_at': '2026-01-01T10:00:00Z',
+              'ends_at': '2026-01-01T11:00:00Z',
+            }),
+            200,
+          );
+        });
+
+        final client = BookslotApiClient(
+          baseUrl: 'https://demo.test/api',
+          tenantSlug: 'demo-studio',
+          httpClient: mock,
+        );
+        final status = await client.cancelBooking('some-token');
+
+        expect(status.status, 'cancelled');
+      },
+    );
+
+    test('cancelBooking maps INVALID_STATUS_TRANSITION (409) to a typed '
+        'exception instead of treating it as success', () async {
+      final mock = MockClient((request) async {
+        return http.Response(
+          jsonEncode({'error': 'INVALID_STATUS_TRANSITION'}),
+          409,
+        );
+      });
+
+      final client = BookslotApiClient(
+        baseUrl: 'https://demo.test/api',
+        tenantSlug: 'demo-studio',
+        httpClient: mock,
+      );
+
+      await expectLater(
+        client.cancelBooking('some-token'),
+        throwsA(
+          isA<BookslotApiException>()
+              .having((e) => e.statusCode, 'statusCode', 409)
+              .having(
+                (e) => e.errorCode,
+                'errorCode',
+                'INVALID_STATUS_TRANSITION',
+              ),
+        ),
+      );
+    });
   });
 }

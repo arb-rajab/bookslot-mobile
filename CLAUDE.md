@@ -70,3 +70,46 @@ This session hand-wrote ~20 files and every one needed reformatting (line
 wrapping, mostly). Run `dart format lib test integration_test` once near
 the end of a batch of edits rather than chasing format compliance file by
 file — it's a single fast, safe, idempotent pass.
+
+## Verifying a claim about bookslot's API needs the `bookslot` repo
+actually attached to *this* session — it is not in scope by default
+
+Session 2 needed to confirm a new bookslot endpoint (a cancel route) was
+real before wiring this app to it. `arb-rajab/bookslot` was not in this
+session's starting GitHub scope (only `bookslot-mobile` was) — use
+`mcp__Claude_Code_Remote__list_repos` to confirm it's available, then
+`add_repo` (owner `arb-rajab`, repo `bookslot`, `access: read` is enough
+for verification-only work) and clone it per that tool's own returned
+instructions, then `register_repo_root` so its CLAUDE.md loads. Don't
+trust a task prompt's description of another repo's endpoint shape
+(status codes, error strings, response fields) without doing this — this
+session's prompt described the cancel contract close to, but not
+byte-for-byte, what `ManageBookingController::cancel()` actually returns/
+throws, and the prompt itself explicitly asked for this verification step,
+not just described it as optional. Unlike bookslot-mobile's own docs, at
+Session 2's clone bookslot's repo was small (~1MB) and `routes/api.php` +
+the relevant controller were enough — no need to touch
+`12-session-handoff.md` at all for a single-endpoint check like this one;
+reserve that file (see the note above) for "what's bookslot's whole
+current state" questions, not "does this one route exist and what does it
+return."
+
+## Widget/unit tests that exercise `ReminderScheduler` need a fake, not
+the real `FlutterLocalNotificationsPlugin`
+
+Calling through to a real `FlutterLocalNotificationsPlugin` (e.g.
+`.cancel()`, `.zonedSchedule()`) inside a plain `flutter_test`
+environment throws `LateInitializationError` — its platform channel is
+never registered without a real platform binding
+(`FlutterLocalNotificationsPlugin.initialize()` alone doesn't fix this in
+a widget test; the test never even calls it). Existing widget tests before
+Session 2 never actually triggered a `ReminderScheduler` call, so this
+didn't surface until `MyBookingsScreen`'s cancel flow (which calls
+`cancelForAppointment`) got a widget test. Fix: subclass
+`ReminderScheduler` in the test file overriding the methods under test
+with no-ops/trackers (see `_FakeReminderScheduler` in
+`test/widget/my_bookings_screen_test.dart`) rather than constructing a
+real `FlutterLocalNotificationsPlugin()` and hoping. `integration_test/`
+running on a real device/emulator shouldn't hit this (real platform
+channels are registered there) — but that's unverified, per this repo's
+running "no emulator available" limitation.

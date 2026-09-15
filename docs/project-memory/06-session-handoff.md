@@ -61,3 +61,62 @@ here to avoid this file going stale the moment CI re-runs.
 **Next recommended session:** `05-backlog.md` #1 (run the integration test
 for real) and #2 (a real customer cancel endpoint, which needs a
 bookslot-side session with push access to that repo, not this one).
+
+## Session 2 — 2026-09-15 — wire self-service cancellation to bookslot's real endpoint
+
+**Objective:** bookslot shipped D-0052 (`POST
+/bookings/manage/{token}/cancel`, `ManageBookingController::cancel()`) —
+wire this app's previously-stubbed `MyBookingsScreen` Cancel action to it.
+
+**What was verified before building anything:** this session had `read`
+access to `arb-rajab/bookslot` (added via `add_repo`, not assumed) and
+read `routes/api.php` and `ManageBookingController.php` directly rather
+than trusting this task prompt's description of the endpoint. Confirmed:
+route is `POST bookings/manage/{token}/cancel` under
+`resolve.tenant.token:manage_booking` (the same middleware as the
+existing `show()` lookup — no new token class); success response is the
+same shape as the existing `GET .../manage/{token}` status response
+(`appointment_id`, `status`, `starts_at`, `ends_at`); a terminal-status
+booking (already `cancelled`/`completed`/`no_show`) returns 409 with
+`{"error": "INVALID_STATUS_TRANSITION"}`; an invalid/expired token returns
+404 with `{"error": "INVALID_OR_EXPIRED_TOKEN"}` (same as `show()`).
+
+**What was built:**
+- `BookslotApiClient.cancelBooking()` — `POST` to the token-based cancel
+  route, parses the same `BookingStatus` shape `fetchBookingStatus` uses.
+- `MyBookingsScreen`: real confirm-dialog → cancel → live status update
+  flow, replacing the old "not available yet" dialog. A 409 is shown as a
+  clear "already cancelled" message, never retried or treated as success.
+  On success, `ReminderScheduler.cancelForAppointment` is called so a
+  cancelled booking's local reminder notification doesn't still fire.
+- Unit tests for `cancelBooking` (success + 409), a new widget test suite
+  (`test/widget/my_bookings_screen_test.dart`) covering both the success
+  and 409 paths, and a second `integration_test/booking_flow_test.dart`
+  scenario driving the same flow through the real widget tree (pre-seeded
+  local booking, since Stripe can't be driven by `integration_test` — see
+  that file's existing docblock).
+- `flutter analyze`: "No issues found!" `flutter test --coverage`: all 19
+  tests passing.
+
+**Not genuinely verified this session (same environment constraint as
+Session 1):** no Android emulator / iOS simulator / device was available,
+so `integration_test/` (including the new cancel scenario) is written and
+statically clean but has never actually been executed. Also not verified:
+real on-device behavior of `flutter_local_notifications`'
+`FlutterLocalNotificationsPlugin.cancel()` actually suppressing an
+already-scheduled OS-level notification — this session confirmed the call
+is made (widget test asserts `ReminderScheduler.cancelForAppointment` is
+invoked with the right id via a fake scheduler, since the real plugin's
+platform channel isn't available in a plain `flutter_test` environment —
+see the new CLAUDE.md note), not that the OS actually drops the alarm.
+Dependabot alerts: this session's toolset had no dependabot-alerts-listing
+tool available (searched, found none) — **not verified**, not reported as
+clean.
+
+**PR/CI status:** see the top-level session summary handed back to the
+coordinator for current numbers.
+
+**Next recommended session:** `05-backlog.md` #1 (run integration_test for
+real — now doubly valuable since it also covers cancellation) and #3
+(contract verification against a live bookslot instance, which would also
+catch drift on this endpoint).

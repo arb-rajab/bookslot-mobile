@@ -17,6 +17,12 @@
 - Schedule a local, on-device reminder notification ahead of the
   appointment's start time.
 
+## In scope (Session 2 — self-service cancellation)
+
+- Cancel a booking via its `manage_booking` token
+  (`POST /bookings/manage/{token}/cancel`, D-0052), reusing the same token
+  minted at booking creation. See `04-decisions.md` D-08 (supersedes D-06).
+
 ## Deliberately out of scope
 
 - **Any staff/admin functionality.** bookslot already has a Nuxt owner
@@ -39,12 +45,12 @@
   account system to log into. "My bookings" in this app is therefore
   necessarily per-device (see `02-architecture.md`), not per-account.
 
-## Known, named limitation: no self-service cancellation
+## Closed limitation: self-service cancellation (Session 2)
 
-bookslot's public API has no customer-initiated cancel endpoint — only an
-owner-authenticated `POST /owner/appointments/{id}/cancel` exists (added
-bookslot Session 20). This app's "My bookings" screen surfaces a Cancel
-action, but it explains this limitation rather than faking a working
-cancel call against an endpoint that doesn't exist for customers. This is a
-real backend gap, not an oversight in this app — see `05-backlog.md` for
-what closing it would require on bookslot's side.
+bookslot Session 21 (D-0052) added a real customer-facing cancel endpoint,
+`POST /bookings/manage/{token}/cancel`, reusing the existing
+`manage_booking` signed token. This app's "My bookings" screen now calls
+it for real — see `04-decisions.md` D-08. The previous "explains the
+limitation instead of faking it" behavior described here no longer
+applies; kept as history for context on why the UI was built the way it
+was in Session 1.

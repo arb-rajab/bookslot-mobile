@@ -150,4 +150,25 @@ class BookslotApiClient {
     final response = await _http.get(_uri('bookings/manage/$manageToken'));
     return BookingStatus.fromJson(_decodeOrThrow(response));
   }
+
+  /// Cancels a booking via its `manage_booking` token
+  /// (`POST /bookings/manage/{token}/cancel`, D-0052 —
+  /// `ManageBookingController::cancel`). Reuses the same signed token minted
+  /// at booking-creation time; no separate cancellation token exists.
+  ///
+  /// Throws [BookslotApiException] with `errorCode`
+  /// `INVALID_STATUS_TRANSITION` (409) if the booking is already in a
+  /// terminal status (`cancelled`, `completed`, `no_show`) — callers must
+  /// not treat that as success or retry it.
+  Future<BookingStatus> cancelBooking(
+    String manageToken, {
+    String? reason,
+  }) async {
+    final response = await _http.post(
+      _uri('bookings/manage/$manageToken/cancel'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'reason': reason}),
+    );
+    return BookingStatus.fromJson(_decodeOrThrow(response));
+  }
 }

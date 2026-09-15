@@ -58,3 +58,19 @@ own SCA-compliant confirmation UI and reporting back. `flutter_stripe`'s
 PaymentSheet does exactly that with Stripe's own maintained, accessible
 native UI — reimplementing card collection UI by hand would be strictly
 worse and riskier (PCI scope) for zero benefit in a demo app.
+
+**D-08. Self-service cancellation now calls a real endpoint, superseding
+D-06 (Session 2).** bookslot Session 21 shipped D-0052 —
+`POST /bookings/manage/{token}/cancel`, reusing the existing
+`manage_booking` token, no new token class. This session (which had read
+access to bookslot to verify the contract directly from
+`routes/api.php`/`ManageBookingController::cancel()`, not just this
+prompt's description of it) wired `MyBookingsScreen`'s Cancel action to
+it: a 409 `INVALID_STATUS_TRANSITION` response (already
+cancelled/completed/no-show) is shown as a clear failure message, never
+treated as success; on success the booking's locally-tracked live status
+updates immediately and its scheduled local reminder notification is
+cancelled via `ReminderScheduler.cancelForAppointment`. D-06's three
+options (omit / fake / explain-the-gap) are moot now that a real endpoint
+exists — this is simply "wire it for real," the option D-06 itself
+called out as preferable once bookslot closed the gap.
