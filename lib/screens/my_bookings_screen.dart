@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../api/bookslot_api_client.dart';
 import '../app_services.dart';
 import '../models/booking.dart';
 
@@ -9,15 +10,12 @@ import '../models/booking.dart';
 /// for why this is per-device, not per-account) and refreshes each one's
 /// real, current status from bookslot's `GET /bookings/manage/{token}`.
 ///
-/// **Cancellation is intentionally not wired to a live endpoint.**
-/// bookslot's public API has no customer-initiated cancel route — only an
-/// owner-authenticated `POST /owner/appointments/{id}/cancel` exists
-/// (Session 20). Building a working "Cancel" button here would mean either
-/// faking success against nothing, or silently calling an owner-only
-/// endpoint this app has no credentials for. Neither is honest, so the
-/// action is visible (customers should be able to find it) but explains
-/// the real limitation instead of pretending to work. See this repo's
-/// backlog for the tracked gap.
+/// Cancellation calls bookslot's real customer-facing endpoint (D-0052,
+/// `POST /bookings/manage/{token}/cancel`), reusing the same
+/// `manage_booking` token already stored locally for that booking — no
+/// separate cancellation token exists. A 409 `INVALID_STATUS_TRANSITION`
+/// response (the booking is already cancelled/completed/no-show) is
+/// surfaced as a clear message, never treated as success or retried.
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
 
@@ -28,6 +26,7 @@ class MyBookingsScreen extends StatefulWidget {
 class _MyBookingsScreenState extends State<MyBookingsScreen> {
   late List<LocalBooking> _localBookings;
   final Map<String, Future<BookingStatus>> _statusFutures = {};
+  final Set<String> _cancellingIds = {};
 
   @override
   void initState() {
@@ -46,23 +45,63 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     }
   }
 
-  void _showCancelUnavailable() {
-    showDialog<void>(
+  Future<void> _confirmAndCancel(LocalBooking local) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancellation'),
-        content: const Text(
-          'Self-service cancellation isn\'t available yet in the public booking '
-          'API. Please contact the studio directly to cancel this appointment.',
-        ),
+        title: const Text('Cancel this booking?'),
+        content: Text('This will cancel your ${local.serviceName} booking.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep booking'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel booking'),
           ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _cancellingIds.add(local.appointmentId));
+    final services = context.read<AppServices>();
+    try {
+      final status = await services.api.cancelBooking(local.manageToken);
+      await services.reminders.cancelForAppointment(local.appointmentId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusFutures[local.appointmentId] = Future.value(status);
+        _cancellingIds.remove(local.appointmentId);
+      });
+    } on BookslotApiException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _cancellingIds.remove(local.appointmentId));
+      final message = e.statusCode == 409
+          ? 'This booking is already cancelled or otherwise can\'t be '
+                'cancelled anymore.'
+          : 'Couldn\'t cancel this booking. Please try again.';
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Cancellation failed'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -87,6 +126,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                         ConnectionState.done => 'unavailable',
                         _ => 'loading…',
                       };
+                      final isCancelled = statusText == 'cancelled';
+                      final isCancelling = _cancellingIds.contains(
+                        local.appointmentId,
+                      );
 
                       return ListTile(
                         title: Text(local.serviceName),
@@ -94,8 +137,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                           '${DateFormat.yMMMEd().add_jm().format(local.startsAt.toLocal())} · $statusText',
                         ),
                         trailing: TextButton(
-                          onPressed: _showCancelUnavailable,
-                          child: const Text('Cancel'),
+                          onPressed: isCancelled || isCancelling
+                              ? null
+                              : () => _confirmAndCancel(local),
+                          child: isCancelling
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Cancel'),
                         ),
                       );
                     },

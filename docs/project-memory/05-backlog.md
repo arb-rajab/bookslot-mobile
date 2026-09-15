@@ -9,13 +9,11 @@ not by ease.
    device was available in this session's environment. This is the single
    biggest gap between "looks right" and "proven right" in this repo right
    now.
-2. **Self-service cancellation** — needs a real customer-facing cancel
-   endpoint on bookslot's side (e.g. `POST /bookings/{token}/cancel` under
-   the existing `manage_booking` signed-token mechanism, mirroring how
-   `confirm-payment` already reuses a token class). This app's
-   `MyBookingsScreen` already has the UI slot ready; it just has nothing
-   real to call. Out of this session's scope (read-only access to
-   bookslot).
+2. ~~**Self-service cancellation**~~ — **closed, Session 2.** bookslot
+   shipped `POST /bookings/manage/{token}/cancel` (D-0052); this app's
+   `MyBookingsScreen` now calls it for real, including the 409
+   already-terminal case and local reminder cancellation. See
+   `04-decisions.md` D-08.
 3. **Contract verification against a live bookslot instance.** This
    session's API fixtures were hand-copied from reading bookslot's
    controller source, not verified against a running backend (none was

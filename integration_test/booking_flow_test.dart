@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:bookslot_mobile/api/bookslot_api_client.dart';
 import 'package:bookslot_mobile/app_services.dart';
 import 'package:bookslot_mobile/main.dart';
+import 'package:bookslot_mobile/models/booking.dart';
 import 'package:bookslot_mobile/services/local_bookings_store.dart';
 import 'package:bookslot_mobile/services/reminder_scheduler.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -147,6 +148,62 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Pay deposit'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'customer can cancel a booking from My Bookings against the real cancel '
+    'endpoint',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final store = LocalBookingsStore(prefs);
+      await store.add(
+        LocalBooking(
+          appointmentId: 'apt-1',
+          manageToken: 'manage-token-1',
+          serviceName: 'Small Tattoo Session',
+          startsAt: DateTime.now().toUtc().add(const Duration(days: 1)),
+        ),
+      );
+
+      final mock = MockClient((request) async {
+        final status = request.method == 'POST' ? 'cancelled' : 'confirmed';
+        return http.Response(
+          jsonEncode({
+            'appointment_id': 'apt-1',
+            'status': status,
+            'starts_at': DateTime.now().toUtc().toIso8601String(),
+            'ends_at': DateTime.now().toUtc().toIso8601String(),
+          }),
+          200,
+        );
+      });
+
+      final services = AppServices(
+        api: BookslotApiClient(
+          baseUrl: 'https://demo.test/api',
+          tenantSlug: 'demo-studio',
+          httpClient: mock,
+        ),
+        bookingsStore: store,
+        reminders: ReminderScheduler(FlutterLocalNotificationsPlugin()),
+      );
+
+      await tester.pumpWidget(BookslotMobileApp(services: services));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('My bookings'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('confirmed'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel booking'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('cancelled'), findsOneWidget);
     },
   );
 }
