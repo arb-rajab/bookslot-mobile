@@ -25,15 +25,26 @@ session's container is fresh, budget for this once up front rather than
 discovering `flutter: command not found` mid-task. If it's a reused
 container, check `which flutter` first — don't reclone.
 
-## Don't fight `flutter analyze`'s `use_null_aware_elements` info lint on
-`lib/api/bookslot_api_client.dart`'s conditional `staff_id` map entry
+## `flutter analyze`'s exit code fails CI on info-level lints too, not
+just warnings/errors — don't leave any lint unresolved, even "just info"
 
-It's real but the suggested `?'staff_id': staffId` rewrite doesn't apply
-here — that syntax is for a possibly-null *value* in a list, not a
-conditionally-*included* map entry, and using it produces an actual type
-error (`String?` not assignable to `Map<String, String>`'s value type).
-This was verified by trying it. Leave the `if (staffId != null) 'staff_id':
-staffId` form as-is; it's correct.
+Session 1 initially left an info-level `use_null_aware_elements` lint on
+`lib/api/bookslot_api_client.dart`'s conditional `staff_id` map entry as
+"harmless," reasoning that the suggested rewrite was actually wrong (see
+below) — but `flutter analyze` still exits nonzero when *any* issue is
+reported, severity be damned, which broke CI's first real run. The fix
+that's actually in the code now is a targeted `// ignore:
+use_null_aware_elements` comment on that line (with the reasoning moved to
+the method's doc comment, since a multi-line comment directly before the
+flagged line does NOT suppress it — the `// ignore:` comment must be the
+line immediately above, nothing else). If you see this lint reappear
+elsewhere: the suggested `?'staff_id': staffId` rewrite doesn't apply to a
+conditionally-*included* map entry (only to a possibly-null *value*), and
+produces a real type error (`String?` not assignable to `Map<String,
+String>`'s value type) if tried — verified by trying it, don't re-attempt
+it. Before considering `flutter analyze` "clean enough," check its actual
+exit code (or just confirm the "No issues found!" line), not just skim
+the issue list for severity.
 
 ## Verifying API request/response shapes: read bookslot's controller
 source directly, not `05-api-contracts.md`

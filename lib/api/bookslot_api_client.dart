@@ -75,6 +75,13 @@ class BookslotApiClient {
 
   /// [from]/[to] are `YYYY-MM-DD` calendar dates in the tenant's own
   /// timezone, matching bookslot's `AvailabilityController` contract.
+  ///
+  /// The conditional `staff_id` map entry below suppresses
+  /// `use_null_aware_elements`: that lint's suggested `?'staff_id':
+  /// staffId` rewrite doesn't apply to a conditionally-*included* map
+  /// entry (only to a possibly-null *value*), and produces a real type
+  /// error (`String?` not assignable to `Map<String, String>`'s value
+  /// type) if tried — verified by trying it.
   Future<List<Slot>> fetchAvailability({
     required String serviceId,
     required DateTime from,
@@ -89,6 +96,7 @@ class BookslotApiClient {
         'service_id': serviceId,
         'from': fmt(from),
         'to': fmt(to),
+        // ignore: use_null_aware_elements
         if (staffId != null) 'staff_id': staffId,
       }),
     );
