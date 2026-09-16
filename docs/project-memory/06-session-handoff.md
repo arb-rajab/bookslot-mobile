@@ -120,3 +120,88 @@ coordinator for current numbers.
 real — now doubly valuable since it also covers cancellation) and #3
 (contract verification against a live bookslot instance, which would also
 catch drift on this endpoint).
+
+## Session 3 — 2026-09-16 — contract reconciliation + emulator attempt
+
+**Objective:** re-verify this app's assumed API surface against bookslot's
+*current* controllers (6 sessions of backend work since Session 2 last
+checked), determine whether bookslot's three newest owner-facing features
+(refund D-0056, balance-charge D-0057, Stripe Connect onboarding D-0058)
+belong on this customer-facing app at all, and get `integration_test/`
+running on a real emulator for the first time.
+
+**Contract verification — result: no drift.** Read `routes/api.php` and
+every controller this app calls (`ServiceController`, `MandateController`,
+`AvailabilityController`, `BookingController`, `PaymentConfirmationController`,
+`ManageBookingController`) plus `MandateRenderer.php` and
+`StripePaymentIntentGateway.php` directly (read-only `bookslot` access,
+confirmed via `list_repos` before assuming it was attached, per the
+existing CLAUDE.md note). Every request/response shape this app's
+`BookslotApiClient` and models assume — `fetchServices`, `fetchMandate`,
+`fetchAvailability`, `createBooking`, `confirmPayment`,
+`fetchBookingStatus`, `cancelBooking` — still matches bookslot's live
+source field-for-field, including error codes (`SLOT_ALREADY_BOOKED`,
+`INVALID_STATUS_TRANSITION`, `INVALID_OR_EXPIRED_TOKEN`, `BOOKING_EXPIRED`,
+`NOT_FOUND`, `PAYMENT_PROVIDER_UNAVAILABLE`) and status codes. One thing
+specifically chased down because it looked like it could be drift: the
+demo-studio tenant's `stripe_connect_account_id` is still `NULL` (seeder
+sets `stripe_onboarding_status: 'not_started'`, unchanged by D-0058) —
+confirmed this does NOT break deposit payments, because
+`PaymentIntentGateway::create()`'s `$connectedAccountId` parameter has
+always been nullable (predates D-0058) and `StripePaymentIntentGateway`
+only adds `transfer_data`/`application_fee_amount` when it's non-null,
+falling back to a plain direct PaymentIntent otherwise. No client-side
+changes were needed or made.
+
+**Refund/balance-charge/Connect onboarding scope determination: out of
+scope for this app, confirmed not assumed.** All three new routes
+(`owner/appointments/{id}/refund`, `owner/appointments/{id}/balance/charge`,
+`owner/stripe/connect/onboarding-link`, `owner/stripe/connect/status`) sit
+under `routes/api.php`'s `auth.tenant.external` + `role:owner` middleware —
+session-based owner authentication this app never holds and, per this
+app's own architecture (`BookslotApiClient`'s class docblock: "Deliberately
+does not touch any owner/staff/admin endpoint"), was never going to hold.
+No mobile-side UI was built for any of the three.
+
+**Real emulator run: blocked, root-caused, not attempted-and-claimed.**
+This container has no `/dev/kvm` (confirmed: absent by default; creating a
+bare device node with `mknod` doesn't help — opening it fails with
+`ENOENT`/no backing driver), no `kvm`/`kvm_intel` kernel module loadable
+(no `modprobe` binary in this container at all), and `/proc/cpuinfo`
+reports neither `vmx` nor `svm` — this session's container
+(`uname -r` → `6.18.44-fc-v33`, a Firecracker microVM) is not given
+nested-virtualization passthrough by its host. The Android emulator
+requires KVM-accelerated virtualization on a Linux host to run at all
+practically; there is no software-emulation fallback worth attempting
+here. This is a sandbox-level constraint, not something installing the
+Android SDK differently would fix — no SDK/emulator components were even
+downloaded, since the KVM check alone is decisive.
+`integration_test/booking_flow_test.dart` remains written and statically
+clean but has never been executed on a real device/emulator, across all
+three sessions of this repo's history.
+
+**Test re-verification:** `flutter pub get`, `dart format --set-exit-if-changed`
+(0 changed), `flutter analyze` ("No issues found!"), `flutter test`
+— all 20 tests (across `test/unit/` and `test/widget/`, including
+`my_bookings_screen_test.dart`'s fake-scheduler cancel tests from Session 2)
+pass against current code. No fixture drift found; bookslot's real
+response shapes (spot-checked against controller source, not just
+`05-api-contracts.md`) match what the test fixtures already encode.
+
+**Not genuinely verified this session:** same standing gaps as Sessions 1
+and 2 — no real emulator/simulator/device (see above, now precisely
+root-caused rather than left vague), and Dependabot alerts (no tooling
+available to check them; not claimed clean).
+
+**PR/CI status:** no code changes this session (contract check found no
+drift to fix) — this file's own update is the only change. See the
+top-level session summary for current PR/CI numbers.
+
+**Next recommended session:** the KVM/emulator blocker is environmental,
+not code — a future session would need a container with nested
+virtualization enabled (or a macOS runner for the iOS simulator path
+instead) to ever actually execute `integration_test/`; re-attempting in an
+identical container won't change the outcome. Otherwise this app's wired
+surface is current as of bookslot Session 28 (D-0058) — re-run this same
+reconciliation after bookslot's next batch of sessions rather than
+assuming staleness.
