@@ -24,7 +24,7 @@ class MyBookingsScreen extends StatefulWidget {
 }
 
 class _MyBookingsScreenState extends State<MyBookingsScreen> {
-  late List<LocalBooking> _localBookings;
+  List<LocalBooking> _localBookings = [];
   final Map<String, Future<BookingStatus>> _statusFutures = {};
   final Set<String> _cancellingIds = {};
 
@@ -34,15 +34,21 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     _reload();
   }
 
-  void _reload() {
+  Future<void> _reload() async {
     final services = context.read<AppServices>();
-    _localBookings = services.bookingsStore.all();
-    _statusFutures.clear();
-    for (final booking in _localBookings) {
-      _statusFutures[booking.appointmentId] = services.api.fetchBookingStatus(
-        booking.manageToken,
-      );
+    final localBookings = await services.bookingsStore.all();
+    if (!mounted) {
+      return;
     }
+    setState(() {
+      _localBookings = localBookings;
+      _statusFutures.clear();
+      for (final booking in _localBookings) {
+        _statusFutures[booking.appointmentId] = services.api.fetchBookingStatus(
+          booking.manageToken,
+        );
+      }
+    });
   }
 
   Future<void> _confirmAndCancel(LocalBooking local) async {
@@ -111,7 +117,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       body: _localBookings.isEmpty
           ? const Center(child: Text('No bookings made from this device yet.'))
           : RefreshIndicator(
-              onRefresh: () async => setState(_reload),
+              onRefresh: _reload,
               child: ListView.separated(
                 itemCount: _localBookings.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
