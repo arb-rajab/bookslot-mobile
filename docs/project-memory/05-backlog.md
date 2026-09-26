@@ -72,13 +72,21 @@ not by ease.
    for the exact probes and two concrete ways to unblock it (allow
    `dl.google.com` in this environment's network settings, or verify on a
    GitHub-hosted runner with an Android SDK and emulator).
-9. **Scheduled reminders probably never fire on Android.** Found by
-   reading, not reproduced. Since v16, `flutter_local_notifications` no
-   longer declares its `ScheduledNotificationReceiver`/
-   `ScheduledNotificationBootReceiver` itself: the app's
-   `AndroidManifest.xml` must, and this app's doesn't. The app also never
-   requests `POST_NOTIFICATIONS` at runtime (Android 13+). `zonedSchedule`
-   doesn't throw without these, so nothing current catches it. Reproduce
-   on the emulator first (e.g. schedule a reminder a few seconds out and
-   assert it shows via `getActiveNotifications()`), then add the
-   receivers/permission per that plugin's README.
+9. ~~**Scheduled reminders probably never fire on Android.**~~ **Closed
+   2026-09-26: reproduced on an emulator, fixed, and confirmed on the
+   emulator.** The note was right that reminders never showed, but wrong
+   that nothing failed loudly. `integration_test/reminder_delivery_test.dart`
+   (real plugin, no fakes, API 34) reproduced three stacked bugs, one
+   `android-native.yml` run each:
+   (1) `zonedSchedule` **threw** `exact_alarms_not_permitted` (run
+   `36265520078`), which in the app would surface right after a successful
+   payment as "Something went wrong confirming your payment";
+   (2) `POST_NOTIFICATIONS` was never requested;
+   (3) once both were fixed, the alarm fired but nothing received it,
+   because the manifest had no `ScheduledNotificationReceiver`. The reminder
+   stayed pending and was never shown (run `36266184239`).
+   After switching to inexact alarms, requesting the permission and
+   declaring the receivers, the reminder was shown ~7 s after scheduling
+   and the test passed (run `36266823630`). See `04-decisions.md` D-10.
+   **Still unverified:** Doze deferral of the inexact alarm, re-arming after
+   reboot, the permission-declined path, API levels other than 34, and iOS.

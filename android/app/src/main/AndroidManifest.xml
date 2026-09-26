@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- flutter_local_notifications (v16+) no longer declares these itself.
+         Lets ScheduledNotificationBootReceiver re-arm pending reminders
+         after a reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
         android:label="bookslot_mobile"
         android:name="${applicationName}"
@@ -25,6 +29,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Required for scheduled reminders (ReminderScheduler). Since v16,
+             flutter_local_notifications no longer declares its receivers in
+             its own manifest. Without ScheduledNotificationReceiver the alarm
+             still fires, but nothing receives it, so no notification is
+             shown. Reproduced on an emulator: see
+             integration_test/reminder_delivery_test.dart. -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

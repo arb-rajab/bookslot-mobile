@@ -130,3 +130,17 @@ and the emulator run about 10. Read a candidate row's job summary, not
 its check colour: candidate steps are allowed to fail. Hold a push until
 running rows finish, because the workflow's concurrency group cancels
 them. See `docs/project-memory/06-session-handoff.md`'s latest entry.
+
+## Reading `android-native.yml` results: logs 404 until the job ends
+
+`get_job_logs` returns HTTP 404 for a job that is still running. Don't
+cancel a run just to "peek": one session did, and the tests had already
+finished (emulator boot time varies by several minutes between runs).
+Wait for completion instead (a background `sleep` of ~12 min, then read).
+For evidence-gathering on a branch without a PR, use `workflow_dispatch`
+(`actions_run_trigger` → `run_workflow`, `ref` = the branch). A push alone
+doesn't trigger this workflow, only a `pull_request` or a dispatch does.
+Emulator tests that make the app request a runtime permission rely on
+`.github/scripts/allow-permission-dialogs.sh` tapping "Allow". Its
+`tapped Allow at x,y` log line is how you know the prompt appeared.
+
