@@ -216,3 +216,56 @@ native Android build is actually verifiable) — a small, mechanical step at
 that point, not a re-investigation. `05-backlog.md` #1 and #3 remain the
 two gaps most worth closing before any of this app's "real Stripe" or
 "real device" language should be taken at face value.
+
+## 2026-09-26 (later session) — flutter_stripe v14/AGP-9 blocker re-check: still blocked, no code change
+
+**Objective:** before re-attempting `05-backlog.md` #8 (13.1.0 → 14.1.0),
+check whether Session 3's blocker still holds. The task said: proceed with
+the upgrade only if the blocker is gone, and never bump the pin without a
+real native build *plus* real-device/credible-emulator confirmation.
+
+**Checkout:** `git fetch origin main`; the working branch was at
+`origin/main` = `2c144a8` (merge of PR #4), the repo's default branch.
+
+**Network, checked with `curl` through this container's egress proxy:**
+
+| Endpoint | Result |
+|---|---|
+| `dl.google.com` (Android SDK `repository2-3.xml`; Google Maven `dl/android/maven2/.../gradle/9.1.0/gradle-9.1.0.pom` and `maven-metadata.xml`) | **Blocked**: proxy answers `403` to CONNECT (also listed under `recentRelayFailures` in `$HTTPS_PROXY/__agentproxy/status`) |
+| `maven.google.com` (AGP 9.1.0 pom, AGP metadata, an AndroidX pom) | Reachable, but only as a **`301` redirect to `dl.google.com`**, so it's blocked in practice. Gradle's `google()` repo resolves from `dl.google.com` anyway. |
+| `dl-ssl.google.com`, `redirector.gvt1.com/edgedl/android/...` (other SDK download hosts) | **Blocked** (CONNECT failure) |
+| `services.gradle.org`, `plugins.gradle.org` | `200`, reachable |
+| `storage.googleapis.com` (Flutter infra), `pub.dev` | `200`, reachable |
+| `repo.maven.apache.org` | `429` (rate-limited, not denied) |
+
+Net effect: the Gradle wrapper and Gradle plugin portal work, but you still
+can't get the Android SDK (platforms, build-tools) or AGP/AndroidX
+artifacts. So `flutter build apk` can't run here at any `flutter_stripe`
+version. That's the same structural block Session 3 recorded.
+
+**Device/emulator:** none. `/dev/kvm` is absent and `/proc/cpuinfo`
+exposes no `vmx`/`svm` flags, so no hardware-accelerated emulator can run.
+No `adb`, `emulator`, or `sdkmanager` on `PATH`. `ANDROID_HOME` and
+`ANDROID_SDK_ROOT` are unset. There's no `/dev/bus/usb`, so no USB device
+can be attached. An emulator image would come from `dl.google.com`
+anyway. The container has 4 CPUs, 15 GB RAM, JDK 21 and Gradle 8.14.3
+(under `/opt`). None of those is the limiting factor.
+
+**Outcome:** stopped at the check, per the task's step 2. `pubspec.yaml` is
+still `flutter_stripe: ^13.1.0`. Nothing was bumped, built or run. No new
+verification of the v14/AGP-9 pairing exists. Everything in D-09 and
+backlog #8 still stands exactly as written.
+
+**What would actually unblock it** (for whoever sets up the next attempt):
+either (a) this cloud environment's network access is widened to allow
+`dl.google.com` (environment settings → Network access). That enables
+`flutter build apk --debug`, but there's still no KVM, so device
+confirmation would still be missing. Or (b) run the verification off this
+sandbox. GitHub-hosted `ubuntu-latest` runners are documented to ship an
+Android SDK, and to support hardware-accelerated Android emulators, so a
+CI job (e.g. `flutter build apk --debug` plus an emulator-backed
+`integration_test` run) could provide both the native build and the
+emulator evidence. That's unverified from here: worth confirming against
+GitHub's current runner-image docs before relying on it. Neither path
+covers backlog #1/#3 (a live bookslot backend and real Stripe test-mode
+keys). A true end-to-end PaymentSheet run needs those too.

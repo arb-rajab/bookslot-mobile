@@ -131,3 +131,6 @@ but this task explicitly named the AGP-9 boundary as the one to hold at if
 its native build tooling proves unverifiable here, rather than shipping a
 version bump whose one real risk point (a native build tooling change) was
 never actually exercised. See `05-backlog.md` for the follow-up.
+*Re-checked 2026-09-26 by a later session: the blocker is unchanged
+(`dl.google.com` still denied; no KVM, emulator or device). The decision
+stands as written. See `06-session-handoff.md`'s latest entry.*

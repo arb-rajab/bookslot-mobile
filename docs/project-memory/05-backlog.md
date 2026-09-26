@@ -53,3 +53,10 @@ not by ease.
    Android SDK) should bump `flutter_stripe` to `^14.1.0` in `pubspec.yaml`
    and run `flutter build apk --debug` before calling it verified — this
    is a small, mechanical step at that point, not a re-investigation.
+   **Re-checked 2026-09-26 (later session): still blocked.** `dl.google.com`
+   is still denied (403 on CONNECT), `maven.google.com` only 301-redirects
+   there, and there's still no KVM, `adb`, or device. The pin was left at
+   13.1.0 with no code change. See `06-session-handoff.md`'s latest entry
+   for the exact probes and two concrete ways to unblock it (allow
+   `dl.google.com` in this environment's network settings, or verify on a
+   GitHub-hosted runner with an Android SDK and emulator).

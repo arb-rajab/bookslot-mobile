@@ -113,3 +113,16 @@ real `FlutterLocalNotificationsPlugin()` and hoping. `integration_test/`
 running on a real device/emulator shouldn't hit this (real platform
 channels are registered there) — but that's unverified, per this repo's
 running "no emulator available" limitation.
+
+## Anything Android-native (`flutter build apk`, emulator, AGP) — check
+the blocker in one step before investing in it
+
+As of 2026-09-26 (re-checked twice), this sandbox can't run a native
+Android build or an emulator. `dl.google.com` gets a proxy 403 on CONNECT,
+`maven.google.com` only 301-redirects there, and there's no `/dev/kvm`. A
+quick re-check:
+`curl -sS -o /dev/null -w '%{http_code}\n' https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml; ls /dev/kvm`
+(`000` plus "No such file" means it's still blocked). Don't reclone Flutter
+or install Gradle bits just to rediscover this. See
+`docs/project-memory/06-session-handoff.md`'s latest entry for the full
+probe list and ways to unblock it.
