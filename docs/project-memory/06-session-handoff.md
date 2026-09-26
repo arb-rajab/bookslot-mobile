@@ -383,3 +383,30 @@ call's behaviour inside the real post-PaymentSheet flow (needs backlog
 #3/#4); iOS (not touched); release builds. Nothing here ran in the Claude
 sandbox, which still has no Android SDK or KVM. Dart-side checks (`dart
 format`, `flutter analyze`, `flutter test` 20/20) did run locally.
+
+### Same session, later: two unexplained emulator hangs on PR #6's own CI
+
+After the table above, `android-native.yml` on the PR head (`eea8a0e`, docs
+only on top of `2d73d5c`) hung twice, at different points, with nothing
+in the log to diagnose:
+- **Attempt 1 (run `36267591312`):** `reminder_delivery_test` passed
+  (`tapped Allow`, reminder shown). Then `android_startup_test` installed
+  and its first test never started (19 min, cancelled).
+- **Attempt 2 (same run, re-run):** `reminder_delivery_test` asked for
+  `POST_NOTIFICATIONS` and the helper never logged a tap, so the test
+  awaited the prompt forever (14 min, cancelled).
+
+**Root cause: not established.** `d0535b8` made the next occurrence
+diagnosable and fail fast:
+- The helper logs every focused-window change and says when the dialog is
+  focused but no Allow button is found. It also falls back to matching the
+  button by text.
+- The runner keeps the screen on and dismisses the keyguard, caps
+  `flutter test` at 15 min, and on failure prints the focused window and
+  filtered logcat.
+- The test fails after 60 s with diagnostics if scheduling never completes.
+
+The first run on `d0535b8` (`36270891731`) passed 5/5, and the helper's log
+showed the prompt focused, then tapped. Neither hang recurred, so this is
+**not proof they're fixed**. Treat a recurrence as a real failure, and
+start from the "Emulator diagnostics" group and the helper's `focus:` lines.
