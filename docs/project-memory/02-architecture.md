@@ -77,6 +77,13 @@ needs no exact-alarm permission (`04-decisions.md` D-10). The plugin's
 `ScheduledNotificationReceiver`/`ScheduledNotificationBootReceiver` are
 declared in the app's own `AndroidManifest.xml`: since v16 the plugin no
 longer declares them, and without them nothing is ever shown (backlog #9).
+The plugin also saves each scheduled reminder to SharedPreferences, and
+`ScheduledNotificationBootReceiver` re-arms them from there on
+`BOOT_COMPLETED`. So reminders survive a reboot without the app being
+opened (verified on an emulator, backlog #10, D-11). Per the plugin
+source, cancelling a reminder also removes it from that list, so a
+cancelled booking's reminder shouldn't come back after a reboot. That
+path hasn't been run on a device.
 
 ## Two Stripe-touching calls, matching bookslot's own transaction boundary
 

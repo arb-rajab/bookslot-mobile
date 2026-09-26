@@ -410,3 +410,60 @@ The first run on `d0535b8` (`36270891731`) passed 5/5, and the helper's log
 showed the prompt focused, then tapped. Neither hang recurred, so this is
 **not proof they're fixed**. Treat a recurrence as a real failure, and
 start from the "Emulator diagnostics" group and the helper's `focus:` lines.
+
+## 2026-09-26 (later session): do reminders survive a reboot? Yes (backlog #10)
+
+**Checkout:** `git fetch origin main`. The working branch
+`claude/android-reminder-reboot-2wbswa` started at `origin/main` =
+`c93a5d8` (merge of PR #6).
+
+**Code reading first.** The manifest already had
+`RECEIVE_BOOT_COMPLETED` and the plugin's `ScheduledNotificationBootReceiver`
+(added in PR #6). Reading `flutter_local_notifications` 18.0.1: `zonedSchedule`
+saves each reminder to SharedPreferences (`scheduled_notifications`). On
+`BOOT_COMPLETED` the receiver calls `rescheduleNotifications`, which
+re-registers every saved reminder with AlarmManager. That was only a
+prediction, so it was then run on the emulator.
+
+**On-device check.** `.github/scripts/reboot-reminder-check.sh` runs last
+in `android-native.yml`'s emulator step. It launches a probe APK
+(`integration_test/reboot_probe_main.dart`) that schedules a reminder due in
+5 minutes through the real `AppServices`/`ReminderScheduler`, and
+allow-permission-dialogs.sh taps Allow. The script asserts the alarm is in
+`dumpsys alarm` and runs `adb reboot`. It then polls `dumpsys alarm` and
+`dumpsys notification` without opening the app. Why it isn't a `flutter
+test`: see D-11 and `CLAUDE.md`.
+
+| Commit | App change | Emulator result |
+|---|---|---|
+| `2fd2161` | none (check only) | **Pass** (run `36273855772`): alarm in AlarmManager before the reboot (`origWhen 21:59:24`, `window=+3m41s`). Rebooted in 30 s. Alarm back 18 s after boot completed, same `origWhen`, `window=+3m3s`. Reminder shown at 22:02:27, **183 s after its scheduled time**. All 5 existing integration tests passed too. |
+| `8a69102` | negative control: boot receiver removed from the manifest | **Fail, as intended** (run `36275027018`): all 5 integration tests passed. The alarm was in AlarmManager before the reboot (`origWhen 22:20:57`). Rebooted in 38 s. After boot, no app alarm ever reappeared, and no reminder was shown 480 s past its time. |
+| `fe7e733` | revert of `8a69102` (manifest identical to `2fd2161`) | re-checked on the PR head (`android-native.yml` runs on the PR) |
+
+**Outcome: not a bug.** No app change was needed. The check stays in CI
+so a regression (manifest edit, plugin upgrade) fails a PR. Backlog #10 is
+closed; see D-11.
+
+**Side finding, not acted on (backlog #11).** The 183 s lateness matches
+the end of the inexact window AlarmManager reported, about 75% of the time
+left until the reminder was due. The window itself isn't caused by the
+reboot: it was already `+3m41s` before it. Whether a reminder that is
+never rebooted also lands at the end of its window wasn't measured
+separately. D-10's "typically minutes" assumption
+is unmeasured for a real 2-hour lead scheduled days out. Changing the
+scheduling mode is a D-10-level tradeoff, so it's left for a decision.
+
+**Verified on a real emulator (GitHub `ubuntu-latest`, API 34 x86_64,
+`google_apis`, awake, no lock credential):** a reminder scheduled through
+the production path before `adb reboot` is re-armed after boot without
+opening the app, and shown. Without the boot receiver it is not.
+
+**Not verified:** physical devices; API levels other than 34; OEM builds
+that restrict boot receivers; a device with a lock-screen PIN (the
+receiver isn't direct-boot aware, so it should run only after the first
+unlock); a device that stays off past the reminder's time; a
+force-stopped app; cancelling a reminder and then rebooting (per the
+plugin source, the cancelled one is removed from the saved list);
+Doze/battery-saver timing; iOS; release builds. The Claude sandbox still
+has no Android SDK or KVM. Only Dart-side checks ran locally (`dart
+format`, `flutter analyze`, `flutter test` 20/20).

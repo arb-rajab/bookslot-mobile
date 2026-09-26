@@ -191,4 +191,64 @@ Choices made:
 
 iOS was deliberately not touched (no iOS build or run exists; see backlog
 #1).
+*Follow-up (reboot session): reminders survive a reboot, verified on the
+emulator with no app change (D-11). That run also showed an inexact
+reminder landing at the end of its window, late by about 75% of the time
+that was left until it was due, so the "typically by minutes" above holds only for short leads.
+See backlog #11.*
 
+
+**D-11. Reminders survive a reboot: verified on an emulator, no app
+change needed. The on-device check stays in CI.** After backlog #9, it was
+an open question whether a scheduled reminder still exists after a
+restart. Android drops all alarms on reboot, so something has to re-arm
+them. The pieces were already in place:
+- `flutter_local_notifications` saves every scheduled notification to
+  SharedPreferences (`scheduled_notifications`).
+- Its `ScheduledNotificationBootReceiver` reloads that list on
+  `BOOT_COMPLETED` and calls AlarmManager again.
+- PR #6 (D-10) had declared that receiver and `RECEIVE_BOOT_COMPLETED` in
+  the app manifest, because since v16 the plugin no longer declares them.
+
+That was only a prediction from reading the code, so it was checked on an
+API 34 emulator with `.github/scripts/reboot-reminder-check.sh` (backlog
+#10). The script launches a probe build once. The probe
+(`integration_test/reboot_probe_main.dart`) schedules a reminder, due in
+5 minutes, through the real `AppServices`/`ReminderScheduler`. The script
+confirms the app's alarm is in `dumpsys alarm` and runs `adb reboot`.
+Then, **without reopening the app**, it polls `dumpsys alarm` and
+`dumpsys notification`. Run `36273855772` (`2fd2161`):
+- The emulator rebooted in 30 s.
+- The alarm was back in AlarmManager 18 s after boot completed, due at
+  its original time (`origWhen` unchanged).
+- The reminder was shown 183 s after its scheduled time.
+
+The negative control removed the boot receiver from the manifest and
+changed nothing else (run `36275027018`, `8a69102`, reverted in
+`fe7e733`). The same check then **failed**. The alarm was in AlarmManager
+before the reboot. The emulator rebooted in 38 s. After boot, no app alarm
+ever came back, and no reminder was shown even 480 s past its time. So
+the check does detect a reminder lost to a reboot, and in this build the
+boot receiver is what prevents that.
+
+Choices made:
+- **No app code change.** The plugin's persistence and boot receiver
+  already do the job. A custom receiver would duplicate them.
+- **The check stays in `android-native.yml` on every relevant PR**, not
+  as a one-off. Removing that manifest entry, or a plugin upgrade that
+  changes the mechanism, would otherwise go unnoticed. It adds ~8 minutes
+  to the emulator step.
+- **Shell-driven, not a `flutter test`.** A Dart test can't span a reboot.
+  Also, when `flutter test` finishes it force-stops the app (see
+  `integration_test_device.dart` in `flutter_tools`), which cancels the
+  app's alarms and blocks `BOOT_COMPLETED` until the next launch. The
+  post-boot checks must not open the app either, since a customer's
+  reminder has to come back without that.
+
+**The 183 s lateness is the inexact alarm's window, not the reboot.**
+AlarmManager reported the window before the reboot (`window=+3m41s` for a
+reminder ~290 s out) and after re-arming (`window=+3m3s`, ~242 s out),
+i.e. about 75% of the time remaining. Delivery came right at the end of
+the second window. D-10 assumed inexact deferral would be "typically
+minutes". It isn't measured for a real reminder scheduled hours or days
+ahead, so it's tracked separately (backlog #11) and not changed here.

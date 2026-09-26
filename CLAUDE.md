@@ -144,3 +144,21 @@ Emulator tests that make the app request a runtime permission rely on
 `.github/scripts/allow-permission-dialogs.sh` tapping "Allow". Its
 `tapped Allow at x,y` log line is how you know the prompt appeared.
 
+
+## On-device checks that must outlive the app process: not `flutter test`
+
+When an integration test finishes, `flutter test` force-stops the app
+(`integration_test_device.dart` in `flutter_tools`). A force-stop cancels
+the app's alarms and blocks `BOOT_COMPLETED` until the next launch. So a
+test of what happens after a reboot, or after the process dies, can't be
+a `flutter test`. The pattern that works is
+`.github/scripts/reboot-reminder-check.sh`: build a separate debug APK
+from a probe entry point (`flutter build apk --debug -t
+integration_test/reboot_probe_main.dart`). Install it and launch it with
+adb, then assert from the shell (`dumpsys alarm`, `dumpsys
+notification`). Give the probe no `_test.dart` suffix, or `flutter test
+integration_test` will try to run it. On a pass, the check adds ~8 min to
+the emulator step (~12.5 min in total). On a fail it adds ~13 min, because
+it waits out an 8-minute grace period. While no PR is open, pushing to the
+branch doesn't cancel a dispatched `android-native.yml` run, since a push
+doesn't trigger that workflow. Once a PR is open, a push does cancel it.
