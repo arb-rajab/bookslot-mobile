@@ -41,6 +41,14 @@
   running bookslot backend was available in this session either). If
   bookslot's public API shape changes, this app's tests would keep passing
   against stale fixtures. Tracked in `05-backlog.md`.
+- **A real native Android Gradle build (`flutter build apk`).**
+  `flutter analyze`/`flutter test` exercise Dart code and static analysis
+  only — no session in this portfolio has ever actually invoked Gradle
+  here. Session 3 (the `flutter_stripe` upgrade, `04-decisions.md` D-09)
+  tried to set this up to verify the v14/AGP-9 boundary specifically and
+  confirmed it's currently impossible in this sandbox: the egress policy
+  denies `dl.google.com`, so neither the Android SDK nor Google's Maven
+  repo (AGP/AndroidX) can be fetched. Tracked in `05-backlog.md` #8.
 
 ## CI
 

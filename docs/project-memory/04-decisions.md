@@ -74,3 +74,60 @@ cancelled via `ReminderScheduler.cancelForAppointment`. D-06's three
 options (omit / fake / explain-the-gap) are moot now that a real endpoint
 exists — this is simply "wire it for real," the option D-06 itself
 called out as preferable once bookslot closed the gap.
+
+**D-09. `flutter_stripe` upgraded 11→13, not 11→14; the AGP-9 boundary
+(v14) deferred for a verification reason, not a code reason.** A prior
+session flagged four risk points before deferring this upgrade: v12
+requiring Freezed v3, v12.2 deprecating `SetupPaymentSheetParameters`/
+customer-sheet constructors, v13 changing `confirm()`'s return shape, and
+v14 requiring an AGP 9 bump. This session re-read `flutter_stripe`'s real
+CHANGELOG.md (from its GitHub repo, not pub.dev's summary) end to end for
+all four boundaries and found three of those four claims did not hold up
+against what this app's code actually calls:
+
+- v12.0.0 truly does require Freezed v3 — confirmed. Irrelevant to this
+  app's own build, though: this app has no `build_runner`/freezed codegen
+  of its own (`freezed_annotation` is only a transitive dependency of
+  `flutter_stripe`'s own generated types), so `flutter pub get` resolved
+  it automatically with zero code changes.
+- v12.2.0's actual deprecation is old `CustomerSheet` constructors
+  ("Implemented new constructors for customer sheet and deprecated the old
+  ones") — not `SetupPaymentSheetParameters`. This app never uses
+  `CustomerSheet` at all; `SetupPaymentSheetParameters` is never mentioned
+  as deprecated anywhere in the changelog's full history. The prior
+  session's claim conflated the two.
+- v13.0.0's actual breaking change is `collectBankAccountForPayment` and
+  `verifyPaymentIntentWithMicrodeposits` returning a new
+  `CollectBankAccountResult` sealed class instead of `PaymentIntent` — a
+  bank-debit/microdeposit verification API this app never calls. There is
+  no `confirm()` return-shape change in this changelog at all; this app
+  doesn't call a Stripe SDK `confirm()` method either — `DepositPaymentScreen`
+  uses `initPaymentSheet`/`presentPaymentSheet` (which confirm internally)
+  and then calls bookslot's own `confirm-payment` REST endpoint, which is
+  this app's HTTP method of the same name, not a Stripe SDK call.
+- v14.0.0's actual breaking change ("Breaking: add support for AGP 9") is
+  the one claim that held up exactly as described.
+
+Net effect: bumping `flutter_stripe` straight through 12.6.0 → 13.1.0
+required zero code changes in this app — `dart format`, `flutter analyze`
+("No issues found!"), and the full 20-test suite were all re-verified
+clean at each step (see `06-session-handoff.md` Session 3). Stopping at
+13.1.0 rather than pushing to 14.1.0 was **not** because 14.1.0 broke
+anything: it also passed `flutter analyze`/`flutter test` with zero
+changes, and this project's own `android/app/build.gradle.kts` was
+already on AGP 9.1.0 before this session touched anything (a byproduct of
+`flutter create` on Flutter 3.47.5's default template, unrelated to
+`flutter_stripe`'s version) — so there was no actual AGP bump left to
+perform. The reason to stop is that this session could not run a real
+native Android Gradle build at all, at any `flutter_stripe` version, to
+prove that pairing actually compiles: this sandbox's egress policy denies
+`dl.google.com` (confirmed via the proxy's own documented 403 failure
+class when attempting to fetch Android cmdline-tools — not assumed), which
+blocks both fetching the Android SDK and Gradle's own resolution of the
+Android Gradle Plugin / AndroidX artifacts from Google's Maven repo. That
+gap is not new or specific to v14 — no session (1, 2, or this one) has
+ever actually run `flutter build apk` in this portfolio's environment —
+but this task explicitly named the AGP-9 boundary as the one to hold at if
+its native build tooling proves unverifiable here, rather than shipping a
+version bump whose one real risk point (a native build tooling change) was
+never actually exercised. See `05-backlog.md` for the follow-up.

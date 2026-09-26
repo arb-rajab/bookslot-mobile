@@ -40,3 +40,16 @@ not by ease.
    demo reviewer in a very different timezone than `demo-studio`'s
    `America/Toronto`. Worth a small "times shown in studio's local time"
    affordance if this becomes a real point of confusion in review.
+8. **Finish the `flutter_stripe` 13→14 step once a real native Android
+   build can be verified.** See `04-decisions.md` D-09. Code-level signals
+   are good (14.1.0 passes `flutter analyze`/`flutter test` with zero
+   changes, and this project's `android/app/build.gradle.kts` is already
+   on AGP 9.1.0, which is v14's only real breaking change), but no session
+   in this portfolio has ever actually run `flutter build apk` here — this
+   session tried, and confirmed the blocker is structural: this sandbox's
+   egress policy denies `dl.google.com`, so the Android SDK and Google's
+   Maven repo (AGP/AndroidX artifacts) are both unreachable. A future
+   session with a container that allows that host (or a pre-provisioned
+   Android SDK) should bump `flutter_stripe` to `^14.1.0` in `pubspec.yaml`
+   and run `flutter build apk --debug` before calling it verified — this
+   is a small, mechanical step at that point, not a re-investigation.
