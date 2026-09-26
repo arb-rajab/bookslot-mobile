@@ -8,11 +8,53 @@ import 'package:bookslot_mobile/services/local_bookings_store.dart';
 import 'package:bookslot_mobile/services/reminder_scheduler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// In-memory fake standing in for the platform channel
+/// `flutter_secure_storage` normally talks to (Keychain/Keystore), which
+/// isn't available in a plain `flutter_test` environment.
+class _FakeSecureStoragePlatform extends FlutterSecureStoragePlatform {
+  final Map<String, String> _values = {};
+
+  @override
+  Future<bool> containsKey({
+    required String key,
+    required Map<String, String> options,
+  }) async => _values.containsKey(key);
+
+  @override
+  Future<void> delete({
+    required String key,
+    required Map<String, String> options,
+  }) async => _values.remove(key);
+
+  @override
+  Future<void> deleteAll({required Map<String, String> options}) async =>
+      _values.clear();
+
+  @override
+  Future<String?> read({
+    required String key,
+    required Map<String, String> options,
+  }) async => _values[key];
+
+  @override
+  Future<Map<String, String>> readAll({
+    required Map<String, String> options,
+  }) async => Map.of(_values);
+
+  @override
+  Future<void> write({
+    required String key,
+    required String value,
+    required Map<String, String> options,
+  }) async => _values[key] = value;
+}
 
 /// `ReminderScheduler` wraps `FlutterLocalNotificationsPlugin`, whose
 /// platform channel isn't registered in a plain widget-test environment
@@ -36,6 +78,7 @@ Future<Widget> _wrap(
   ReminderScheduler? reminders,
 }) async {
   SharedPreferences.setMockInitialValues({});
+  FlutterSecureStoragePlatform.instance = _FakeSecureStoragePlatform();
   final prefs = await SharedPreferences.getInstance();
   final store = LocalBookingsStore(prefs);
   await store.add(
