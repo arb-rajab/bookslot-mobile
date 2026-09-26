@@ -22,6 +22,18 @@
   uses no fakes: it runs the real `main()` and `Stripe.instance
   .applySettings()` through the real native plugins, so it catches
   Android host misconfiguration that Dart-only tests can't see.
+  `reminder_delivery_test.dart` also uses no fakes. It schedules a
+  reminder through the real `ReminderScheduler`, due ~10 s out, and polls
+  `getActiveNotifications()` until it appears (backlog #9, D-10). It prints
+  permission, exact-alarm and pending-request diagnostics, so a failure
+  says which layer broke.
+- **Permission prompts in emulator tests.** `integration_test` can't tap
+  platform-owned UI, so `android-native.yml` runs the suite through
+  `.github/scripts/run-integration-tests.sh`. That script runs
+  `allow-permission-dialogs.sh` in the background, which taps "Allow"
+  whenever the system permission dialog has focus. It never `pm grant`s
+  anything, so a permission the app forgets to *request* still fails the
+  test. Only "Allow" is ever exercised: the decline path isn't tested.
 
 ## What's NOT tested, and why
 
@@ -41,6 +53,11 @@
   running bookslot backend was available in this session either). If
   bookslot's public API shape changes, this app's tests would keep passing
   against stale fixtures. Tracked in `05-backlog.md`.
+- **Reminder edge cases on Android.** The emulator test covers the
+  "awake device, reminder due in seconds" case on API 34 only. Not
+  covered: Doze/idle deferral of the inexact alarm, re-arming after a
+  reboot (`ScheduledNotificationBootReceiver`), the user declining the
+  notification permission, and other API levels.
 - **Native Android anywhere but GitHub Actions.** The Claude cloud
   sandbox still can't run Gradle or an emulator (`dl.google.com` denied,
   no KVM; see `CLAUDE.md`). Native evidence comes only from
@@ -54,7 +71,8 @@
 - `.github/workflows/android-native.yml` runs `flutter build apk --debug`,
   then `flutter test integration_test` on an API 34 x86_64 emulator. It runs
   on PRs touching `pubspec*`, `android/**`, `integration_test/**`,
-  `lib/main.dart` or the workflow itself, and on `workflow_dispatch`.
+  `lib/main.dart`, `lib/services/reminder_scheduler.dart`, `.github/scripts/**`
+  or the workflow itself, and on `workflow_dispatch`.
 - Its matrix rows are `flutter_stripe` versions. `pinned` (as committed)
   gates the PR, and on PRs it's the only row. Candidate rows, added via
   dispatch, may fail without failing their job. **Read a candidate's job summary, not its check

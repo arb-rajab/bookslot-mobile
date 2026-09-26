@@ -71,6 +71,13 @@ schedules one `flutter_local_notifications` `zonedSchedule` call, keyed by
 a stable hash of the appointment id so re-scheduling or cancelling the same
 appointment's reminder is idempotent.
 
+On Android it first asks for `POST_NOTIFICATIONS` (13+; a no-op once
+answered), and it schedules an *inexact* allow-while-idle alarm, which
+needs no exact-alarm permission (`04-decisions.md` D-10). The plugin's
+`ScheduledNotificationReceiver`/`ScheduledNotificationBootReceiver` are
+declared in the app's own `AndroidManifest.xml`: since v16 the plugin no
+longer declares them, and without them nothing is ever shown (backlog #9).
+
 ## Two Stripe-touching calls, matching bookslot's own transaction boundary
 
 bookslot's `BookingController`/`PaymentConfirmationController` deliberately

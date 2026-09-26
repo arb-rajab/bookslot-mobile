@@ -144,3 +144,51 @@ Android bugs surfaced and were fixed along the way. See the handoff.*
 *On that evidence the maintainer approved the bump: the pin is now
 `^14.1.0`. The PaymentSheet-flow gap noted above still applies (backlog
 #3/#4); it's no longer a reason to hold the version.*
+*Follow-up (backlog #9 session): PR #5's two Android fixes were re-checked
+against their CI logs. Both were reproduced as failures before the fix
+landed, so no new regression tests were needed. See D-10 and the
+handoff.*
+
+**D-10. Android reminders use inexact alarms and ask for
+`POST_NOTIFICATIONS` just in time; CI answers the real permission dialog
+instead of pre-granting.** Backlog #9 was reproduced on an API 34 emulator
+(`integration_test/reminder_delivery_test.dart`, via `android-native.yml`).
+It turned out to be three stacked bugs, each confirmed by its own emulator
+run before being fixed:
+
+1. `zonedSchedule(..., exactAllowWhileIdle)` **threw**
+   `PlatformException(exact_alarms_not_permitted)`. The backlog note had
+   assumed a silent failure. The app never declared `SCHEDULE_EXACT_ALARM`,
+   which Android 14 no longer pre-grants anyway. In the app that call runs
+   right after a successful deposit payment, inside `DepositPaymentScreen`'s
+   catch-all, so on Android 12+ a customer who had just paid would have been
+   told "Something went wrong confirming your payment."
+2. Nothing ever requested `POST_NOTIFICATIONS`, so on Android 13+
+   notifications were disabled (`areNotificationsEnabled() == false`).
+3. With both fixed, the alarm fired but nothing received it: the reminder
+   stayed in `pendingNotificationRequests()` and never showed, because
+   `ScheduledNotificationReceiver` wasn't declared in the app manifest.
+
+Choices made:
+- **Inexact (`inexactAllowWhileIdle`), not exact.** The alternatives were
+  `SCHEDULE_EXACT_ALARM`, which the user has to switch on in system
+  Settings (a poor prompt for a booking app), and `USE_EXACT_ALARM`, which
+  Google Play restricts to alarm-clock/calendar apps. A reminder two hours
+  before an appointment doesn't need to land to the second. Tradeoff: when
+  the device is in Doze, Android may defer it (typically by minutes). That
+  deferral is **not** measured: the emulator test fires ~10 s out on an
+  awake device.
+- **Ask for `POST_NOTIFICATIONS` inside `scheduleForAppointment`,** i.e.
+  the first time there's a reminder worth showing, rather than at app
+  launch. If the user declines, the reminder is still scheduled but
+  Android suppresses it. There's no in-app messaging about that (not
+  built; small follow-up if it matters).
+- **CI plays the user rather than pre-granting.**
+  `.github/scripts/allow-permission-dialogs.sh` taps "Allow" on the real
+  system dialog while the emulator tests run, and never calls `pm grant`.
+  So the test fails if the app stops *requesting* the permission, not just
+  if it stops declaring it.
+
+iOS was deliberately not touched (no iOS build or run exists; see backlog
+#1).
+
