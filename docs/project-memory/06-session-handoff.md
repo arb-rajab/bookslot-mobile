@@ -317,7 +317,8 @@ builds (R8/ProGuard rules from flutter_stripe's README step 7 aren't set
 up, and don't matter until minify is on); and backlog #9, scheduled
 reminders, which reading suggests are broken on Android.
 
-**Pin:** still `^13.1.0`. The workflow's evidence clears the
-native-build/emulator bar that held the bump back. Whether that's enough
-without a real PaymentSheet run is the maintainer's call, so the bump
-wasn't made here.
+**Pin:** bumped to `^14.1.0` after the maintainer approved it on this
+evidence. Only the four Stripe packages changed in `pubspec.lock`, with no
+code changes. `android-native.yml`'s default candidate row was dropped,
+since 14.1.0 is now `pinned`. Before the bump, 13.1.0 passed the same
+native build and 4/4 emulator tests, so a revert target is known-good.

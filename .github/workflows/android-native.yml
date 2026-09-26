@@ -6,8 +6,9 @@ name: Android native
 # docs/project-memory/04-decisions.md D-09 and 05-backlog.md #8.
 #
 # Each matrix row is a flutter_stripe version. "pinned" is whatever
-# pubspec.lock commits and gates the PR. Other rows are candidates, run as
-# evidence for a future bump: their build/emulator steps may fail without
+# pubspec.lock commits and gates the PR; on PRs it's the only row. To gather
+# evidence for a future bump, dispatch with extra candidate versions, e.g.
+# ["pinned", "14.2.0"]. Candidate rows are evidence only: their build/emulator steps may fail without
 # failing the job (so they never block an unrelated PR), and the job's
 # summary plus a warning annotation say which step failed. A green
 # candidate *job* on its own therefore proves nothing; read its summary.
@@ -25,7 +26,7 @@ on:
     inputs:
       stripe_versions:
         description: 'JSON list of flutter_stripe versions ("pinned" = as committed)'
-        default: '["pinned", "14.1.0"]'
+        default: '["pinned"]'
 
 concurrency:
   group: android-native-${{ github.ref }}
@@ -39,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stripe: ${{ fromJSON(inputs.stripe_versions || '["pinned", "14.1.0"]') }}
+        stripe: ${{ fromJSON(inputs.stripe_versions || '["pinned"]') }}
     steps:
       - uses: actions/checkout@v4
 

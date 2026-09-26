@@ -56,8 +56,8 @@
   on PRs touching `pubspec*`, `android/**`, `integration_test/**`,
   `lib/main.dart` or the workflow itself, and on `workflow_dispatch`.
 - Its matrix rows are `flutter_stripe` versions. `pinned` (as committed)
-  gates the PR. Candidate rows (default `14.1.0`) may fail without
-  failing their job. **Read a candidate's job summary, not its check
+  gates the PR, and on PRs it's the only row. Candidate rows, added via
+  dispatch, may fail without failing their job. **Read a candidate's job summary, not its check
   colour.**
 - To try other versions, dispatch it with `stripe_versions`, e.g.
   `["pinned", "14.2.0"]`.

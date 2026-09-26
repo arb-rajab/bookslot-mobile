@@ -141,3 +141,6 @@ project's AGP 9.1.0 setup, and passes all emulator integration tests
 unverified piece is a real PaymentSheet flow, which is gated on a live
 backend and Stripe keys rather than on the SDK version. Two pre-existing
 Android bugs surfaced and were fixed along the way. See the handoff.*
+*On that evidence the maintainer approved the bump: the pin is now
+`^14.1.0`. The PaymentSheet-flow gap noted above still applies (backlog
+#3/#4); it's no longer a reason to hold the version.*

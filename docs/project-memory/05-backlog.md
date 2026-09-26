@@ -39,8 +39,10 @@ not by ease.
    demo reviewer in a very different timezone than `demo-studio`'s
    `America/Toronto`. Worth a small "times shown in studio's local time"
    affordance if this becomes a real point of confusion in review.
-8. **Finish the `flutter_stripe` 13→14 step once a real native Android
-   build can be verified.** See `04-decisions.md` D-09. Code-level signals
+8. ~~**Finish the `flutter_stripe` 13→14 step once a real native Android
+   build can be verified.**~~ **Closed 2026-09-26: pin bumped to `^14.1.0`**
+   on the maintainer's go-ahead, after the native evidence below. The
+   history is kept as-is below. See `04-decisions.md` D-09. Code-level signals
    are good (14.1.0 passes `flutter analyze`/`flutter test` with zero
    changes, and this project's `android/app/build.gradle.kts` is already
    on AGP 9.1.0, which is v14's only real breaking change), but no session
