@@ -322,3 +322,64 @@ evidence. Only the four Stripe packages changed in `pubspec.lock`, with no
 code changes. `android-native.yml`'s default candidate row was dropped,
 since 14.1.0 is now `pinned`. Before the bump, 13.1.0 passed the same
 native build and 4/4 emulator tests, so a revert target is known-good.
+
+## 2026-09-26 (later session) — PR #5 proof-standard check; backlog #9 reproduced and fixed
+
+**Checkout:** `git fetch origin main`. The working branch
+`claude/android-fixes-reminders-uti1nj` started at `origin/main` =
+`7291933` (merge of PR #5).
+
+### Part 1: were PR #5's two Android fixes test-proven? Yes, both.
+
+Checked against the actual `android-native.yml` job logs, not the commit
+messages:
+
+- **Gradle desugaring (`79725db`).** The gate is the pinned row's
+  `flutter build apk --debug` step, which runs on every PR touching
+  `android/**`/`pubspec*`. On `1ace642` (run `36260643617`) it failed with
+  `Dependency ':flutter_local_notifications' requires core library
+  desugaring to be enabled for :app` / `BUILD FAILED`. On `79725db` it
+  passed. Reverting the setting would fail that step again.
+- **Startup crash (`b24dacc`).** `integration_test/android_startup_test.dart`
+  landed in `1ace642`, before the fix. On `79725db` (run `36260925570`)
+  both cases failed on the emulator with `PlatformException(flutter_stripe
+  initialization failed … MainActivity is not a subclass
+  FlutterFragmentActivity)`, the second thrown from `main.dart:15`. From
+  `b24dacc` on, both pass; on `5df67cb`, the PR head, 4/4 passed.
+
+No new tests were added for Part 1.
+
+### Part 2: backlog #9, reproduced first, then fixed one layer at a time
+
+`integration_test/reminder_delivery_test.dart` (new) schedules through the
+real `ReminderScheduler`, due ~10 s out, and polls
+`getActiveNotifications()` for 90 s, printing diagnostics. CI answers the
+permission prompt with `.github/scripts/allow-permission-dialogs.sh`, which
+taps the real "Allow" button and never `pm grant`s. Each commit was run
+with `workflow_dispatch` on the branch (API 34 x86_64 emulator):
+
+| Commit | App change | Emulator result |
+|---|---|---|
+| `ee307ca` | none (test only) | **Fail:** `PlatformException(exact_alarms_not_permitted)` from `scheduleForAppointment`; before scheduling `notificationsEnabled=false, canScheduleExact=false` (run `36265520078`) |
+| `3831aba` | inexact alarm + request `POST_NOTIFICATIONS` | **Fail:** helper `tapped Allow`, `notificationsEnabled=true`, no throw, but no notification after 90 s and `stillPending=[508218634]`: the fired alarm was never received (run `36266184239`; shows "cancelled" because I cancelled just as the step finished, but the log is complete) |
+| `2d73d5c` | declare `ScheduledNotificationReceiver`/`BootReceiver` + `RECEIVE_BOOT_COMPLETED` | **Pass:** notification shown ~7 s after the Allow tap, `stillPending=[]`; all 5 integration tests passed (run `36266823630`) |
+
+Worse than the backlog note assumed: step 1 was a *throw*, not a silent
+no-op. In the app it would have surfaced right after a successful deposit
+payment, through `DepositPaymentScreen`'s catch-all, as "Something went
+wrong confirming your payment." That screen wasn't touched (Stripe flow is
+out of scope). The throw is gone because `ReminderScheduler` no longer
+uses exact alarms. Rationale is in `04-decisions.md` D-10.
+
+**Verified on a real emulator (GitHub `ubuntu-latest`, API 34):** a
+reminder scheduled through the production `ReminderScheduler` path is
+requested, scheduled without error, received and shown; the app raises
+the POST_NOTIFICATIONS prompt itself.
+
+**Not verified:** Doze/idle deferral of the inexact alarm for a real
+2-hour lead; re-arming after reboot; the user declining the prompt (no
+in-app messaging exists for that); API levels other than 34; the reminder
+call's behaviour inside the real post-PaymentSheet flow (needs backlog
+#3/#4); iOS (not touched); release builds. Nothing here ran in the Claude
+sandbox, which still has no Android SDK or KVM. Dart-side checks (`dart
+format`, `flutter analyze`, `flutter test` 20/20) did run locally.
