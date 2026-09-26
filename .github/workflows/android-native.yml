@@ -70,6 +70,16 @@ jobs:
         continue-on-error: ${{ matrix.stripe != 'pinned' }}
         run: flutter build apk --debug
 
+      # A second debug APK whose entry point schedules one reminder, for
+      # reboot-reminder-check.sh. Copied aside because `flutter test` below
+      # rebuilds app-debug.apk.
+      - name: Build reboot probe APK
+        if: steps.build.outcome == 'success'
+        continue-on-error: ${{ matrix.stripe != 'pinned' }}
+        run: |
+          flutter build apk --debug -t integration_test/reboot_probe_main.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk build/reboot-probe.apk
+
       - name: Enable KVM
         if: steps.build.outcome == 'success'
         run: |
@@ -89,7 +99,10 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: .github/scripts/run-integration-tests.sh
+          # Reboots the emulator, so it runs last.
+          script: |
+            .github/scripts/run-integration-tests.sh
+            .github/scripts/reboot-reminder-check.sh build/reboot-probe.apk
 
       - name: Summary
         if: always()
