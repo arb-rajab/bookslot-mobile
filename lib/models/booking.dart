@@ -88,11 +88,4 @@ class LocalBooking {
   final String manageToken;
   final String serviceName;
   final DateTime startsAt;
-
-  Map<String, dynamic> toJson() => {
-    'appointment_id': appointmentId,
-    'manage_token': manageToken,
-    'service_name': serviceName,
-    'starts_at': startsAt.toIso8601String(),
-  };
 }
