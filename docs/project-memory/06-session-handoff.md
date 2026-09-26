@@ -120,3 +120,99 @@ coordinator for current numbers.
 real — now doubly valuable since it also covers cancellation) and #3
 (contract verification against a live bookslot instance, which would also
 catch drift on this endpoint).
+
+## Session 3 — 2026-09-26 — flutter_stripe 11→14 upgrade, reached 13
+
+**Objective:** pick up a prior session's deferred `flutter_stripe` 11→14
+upgrade (real risk had been flagged at each major boundary: Freezed v3 at
+v12, `SetupPaymentSheetParameters`/customer-sheet deprecations at v12.2,
+`confirm()`'s return shape at v13, AGP 9 at v14) with a full budget
+dedicated to it.
+
+**What was verified before building anything:** this session did not trust
+the prior session's risk summary as still accurate — it re-read
+`flutter_stripe`'s actual `CHANGELOG.md` from its GitHub repo
+(`flutter-stripe/flutter_stripe`, `packages/stripe/CHANGELOG.md`) end to
+end across all four majors, and separately grepped this app's own
+`lib/screens/deposit_payment_screen.dart` for exactly which Stripe SDK
+calls it makes. Also re-added read access to `arb-rajab/bookslot`
+(`add_repo`, since a fresh container starts with none of that state) and
+read `PaymentConfirmationController.php`/`BookingController.php` directly
+to confirm the `client_secret`/`payment_confirmation_token`/`status`
+contract this app depends on is unchanged and is entirely server-side —
+not something a client SDK version bump could affect.
+
+**What was found:** three of the prior session's four flagged risks did
+not hold up against the real changelog and this app's actual usage (see
+`04-decisions.md` D-09 for the full breakdown — the short version: this
+app doesn't use `CustomerSheet`, doesn't call `collectBankAccountForPayment`/
+`verifyPaymentIntentWithMicrodeposits`, and doesn't call a Stripe SDK
+`confirm()` method at all). Only the Freezed v3 requirement (v12) and the
+AGP 9 requirement (v14) were confirmed accurate — and Freezed v3 turned
+out to be irrelevant to this app's own build (no own freezed codegen).
+
+**What was built:** `flutter_stripe` bumped 11.3.0 → 12.6.0 → 13.1.0,
+incrementally, with `flutter pub get` / `dart format --set-exit-if-changed`
+/ `flutter analyze` / `flutter test --coverage` (all 20 tests) re-run and
+confirmed clean at every step. Zero application code changes were needed
+at any step — `pubspec.yaml`/`pubspec.lock` only.
+
+**Where it stopped, and why:** at 13.1.0, one boundary short of the
+latest (14.1.0). 14.1.0 itself also passed the full clean-analyze/clean-test
+check with zero code changes, and this project's Android Gradle config was
+*already* on AGP 9.1.0 before this session touched anything (a Flutter
+3.47.5 template default, unrelated to `flutter_stripe`). The stopping
+reason is that this session attempted to actually provision an Android SDK
+(`commandlinetools` from `dl.google.com`) to run a real `flutter build apk
+--debug` and prove the AGP-9 pairing compiles — not just that Dart
+analysis is clean — and hit a confirmed, structural block: this sandbox's
+egress proxy denies `dl.google.com` (a genuine 403/organization-policy
+response, not a flaky network error — see `/root/.ccr/README.md`'s own
+documented failure class for this). That denial also blocks Gradle's own
+resolution of the Android Gradle Plugin and AndroidX artifacts from
+Google's Maven repo, so there was no way to route around it within this
+container. Per this task's own instruction to stop at the last version
+before an unverifiable native-build-tooling boundary rather than force it
+through, `pubspec.yaml` was reverted from 14.1.0 back to 13.1.0. See
+`04-decisions.md` D-09 and `05-backlog.md` #8.
+
+**Also checked, per this task's explicit requirements:**
+- Test-mode-only Stripe constraint (bookslot's own D-0036,
+  `01-scope-and-non-goals.md`): untouched. `lib/config/env.dart` still
+  defaults `stripePublishableKey` to `pk_test_placeholder` and its doc
+  comment still states the constraint; nothing in this session's diff
+  touches that file.
+- Interaction with self-service cancellation (D-0052/D-08, Session 2):
+  `ReminderScheduler.cancelForAppointment` and the cancel flow don't touch
+  Stripe at all (bookslot's cancel endpoint doesn't call Stripe either, per
+  `ManageBookingController::cancel()`), so there's no interaction to check
+  beyond confirming `test/widget/my_bookings_screen_test.dart` (the test
+  that exercises this path) still passes — it does, at every step.
+
+**Not genuinely verified this session, same standing gap as Sessions 1/2,
+now confirmed as a hard environment limitation rather than assumed:** a
+real end-to-end run of the deposit PaymentSheet flow against a live
+backend. This needs three things this sandbox structurally lacks: (1) a
+booted Android emulator/iOS simulator/device — no KVM (`/dev/kvm` absent,
+no CPU virtualization exposed) and no Android SDK reachable at all, so not
+even a software-rendered emulator is feasible here; (2) a live bookslot
+instance — `Env.apiBaseUrl`'s default,
+`https://demo.bookslot.example/api`, is an RFC 2606 reserved
+non-resolving domain (confirmed: proxy returns a CONNECT failure, not a
+real host), meaning this app has never had a real deployed backend to hit,
+in any session; (3) live Stripe test-mode API credentials, which don't
+exist in this repository or its `.env` conventions (a `pk_test_...`
+publishable key is safe to ship, but was never provided as a real,
+working one). This is the same category of gap `03-testing-strategy.md`
+already documents for `integration_test/` and PaymentSheet failure-path
+coverage — this session's contribution is confirming *why*, concretely,
+rather than leaving it as "no device was available."
+
+**PR/CI status:** see the top-level session summary handed back to the
+coordinator for current numbers.
+
+**Next recommended session:** `05-backlog.md` #8 (finish 13→14 once a
+native Android build is actually verifiable) — a small, mechanical step at
+that point, not a re-investigation. `05-backlog.md` #1 and #3 remain the
+two gaps most worth closing before any of this app's "real Stripe" or
+"real device" language should be taken at face value.
