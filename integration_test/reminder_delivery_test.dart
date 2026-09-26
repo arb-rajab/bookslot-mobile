@@ -46,13 +46,23 @@ void main() {
       'reminder diagnostics before scheduling: ${await diagnostics()}',
     );
 
+    // On Android 13+ this waits for the POST_NOTIFICATIONS prompt to be
+    // answered. Fail with diagnostics rather than hang if nobody answers it.
     const leadTime = Duration(hours: 2);
-    await reminders.scheduleForAppointment(
-      appointmentId: 'apt-reminder-e2e',
-      serviceName: 'Small Tattoo Session',
-      startsAt: DateTime.now().add(leadTime + const Duration(seconds: 10)),
-      leadTime: leadTime,
-    );
+    await reminders
+        .scheduleForAppointment(
+          appointmentId: 'apt-reminder-e2e',
+          serviceName: 'Small Tattoo Session',
+          startsAt: DateTime.now().add(leadTime + const Duration(seconds: 10)),
+          leadTime: leadTime,
+        )
+        .timeout(
+          const Duration(seconds: 60),
+          onTimeout: () async => fail(
+            'scheduleForAppointment did not complete within 60s; was the '
+            'permission prompt shown and answered? (${await diagnostics()})',
+          ),
+        );
 
     ActiveNotification? shown;
     final deadline = DateTime.now().add(const Duration(seconds: 90));
