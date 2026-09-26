@@ -134,3 +134,10 @@ never actually exercised. See `05-backlog.md` for the follow-up.
 *Re-checked 2026-09-26 by a later session: the blocker is unchanged
 (`dl.google.com` still denied; no KVM, emulator or device). The decision
 stands as written. See `06-session-handoff.md`'s latest entry.*
+*Later the same day, `.github/workflows/android-native.yml` supplied the
+missing native evidence from a GitHub runner. 14.1.0 builds with this
+project's AGP 9.1.0 setup, and passes all emulator integration tests
+(including Stripe native init via the real `main()`). The remaining
+unverified piece is a real PaymentSheet flow, which is gated on a live
+backend and Stripe keys rather than on the SDK version. Two pre-existing
+Android bugs surfaced and were fixed along the way. See the handoff.*

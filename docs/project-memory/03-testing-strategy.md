@@ -14,10 +14,14 @@
   states, and `BookingFormScreen`'s validation (mandate checkbox required,
   invalid email rejected) with an assertion that the API is never called
   when client-side validation fails.
-- **Integration test** (`integration_test/booking_flow_test.dart`): a real
-  widget-tree walk from the services list through slot selection and the
-  booking form, stopping at the Stripe handoff — see below for why it
-  stops there, and its own docblock for the full reasoning.
+- **Integration tests** (`integration_test/`), run on a KVM-accelerated
+  Android emulator by `.github/workflows/android-native.yml`:
+  `booking_flow_test.dart` walks the widget tree from the services list
+  through slot selection and the booking form, stopping at the Stripe
+  handoff (see below for why it stops there). `android_startup_test.dart`
+  uses no fakes: it runs the real `main()` and `Stripe.instance
+  .applySettings()` through the real native plugins, so it catches
+  Android host misconfiguration that Dart-only tests can't see.
 
 ## What's NOT tested, and why
 
@@ -28,31 +32,32 @@
   `confirm-payment` returns a non-`confirmed` status) is exercised by
   reading the code, not by an automated test — a real gap, tracked in
   `05-backlog.md`.
-- **A real device/emulator run of `integration_test/`.** This session's
-  environment had no Android emulator, iOS simulator, or connected device
-  available (same category of gap bookslot's own Session 16/17/19 hit for
-  its frontend, and Session 20 eventually resolved by finding a
-  pre-installed Chromium — no Flutter-capable equivalent was available
-  here). The integration test is written and analyzed clean, but has never
-  actually executed. See `05-backlog.md`.
+- **iOS.** Nothing iOS-native has ever been built or run (no macOS
+  runner in CI, no simulator in the Claude sandbox). The Android emulator
+  job says nothing about iOS host configuration.
 - **Contract tests against bookslot's real API.** This app's fixtures are
   hand-copied from reading bookslot's controller source in this session,
   not generated from or verified against a live bookslot instance (no
   running bookslot backend was available in this session either). If
   bookslot's public API shape changes, this app's tests would keep passing
   against stale fixtures. Tracked in `05-backlog.md`.
-- **A real native Android Gradle build (`flutter build apk`).**
-  `flutter analyze`/`flutter test` exercise Dart code and static analysis
-  only — no session in this portfolio has ever actually invoked Gradle
-  here. Session 3 (the `flutter_stripe` upgrade, `04-decisions.md` D-09)
-  tried to set this up to verify the v14/AGP-9 boundary specifically and
-  confirmed it's currently impossible in this sandbox: the egress policy
-  denies `dl.google.com`, so neither the Android SDK nor Google's Maven
-  repo (AGP/AndroidX) can be fetched. Tracked in `05-backlog.md` #8.
+- **Native Android anywhere but GitHub Actions.** The Claude cloud
+  sandbox still can't run Gradle or an emulator (`dl.google.com` denied,
+  no KVM; see `CLAUDE.md`). Native evidence comes only from
+  `android-native.yml`, so a session that changes `android/**` has to push
+  and read that workflow's results; it can't check locally.
 
 ## CI
 
-`.github/workflows/ci.yml` runs `dart format --set-exit-if-changed`,
-`flutter analyze`, and `flutter test --coverage` on every push/PR.
-`integration_test/` is deliberately excluded from CI (no emulator on a
-plain `ubuntu-latest` runner) rather than silently attempted and ignored.
+- `.github/workflows/ci.yml` runs `dart format --set-exit-if-changed`,
+  `flutter analyze` and `flutter test --coverage` on every push/PR.
+- `.github/workflows/android-native.yml` runs `flutter build apk --debug`,
+  then `flutter test integration_test` on an API 34 x86_64 emulator. It runs
+  on PRs touching `pubspec*`, `android/**`, `integration_test/**`,
+  `lib/main.dart` or the workflow itself, and on `workflow_dispatch`.
+- Its matrix rows are `flutter_stripe` versions. `pinned` (as committed)
+  gates the PR. Candidate rows (default `14.1.0`) may fail without
+  failing their job. **Read a candidate's job summary, not its check
+  colour.**
+- To try other versions, dispatch it with `stripe_versions`, e.g.
+  `["pinned", "14.2.0"]`.

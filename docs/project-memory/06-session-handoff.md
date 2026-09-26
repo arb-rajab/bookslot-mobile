@@ -269,3 +269,55 @@ emulator evidence. That's unverified from here: worth confirming against
 GitHub's current runner-image docs before relying on it. Neither path
 covers backlog #1/#3 (a live bookslot backend and real Stripe test-mode
 keys). A true end-to-end PaymentSheet run needs those too.
+
+### Same session, continued: native evidence via GitHub Actions
+
+The user asked for a GitHub Actions workflow to get native evidence from
+GitHub's runners instead: an Android SDK, Google Maven access and KVM
+are all available there. What was added and found, in commit order:
+
+1. **`1ace642`** added `.github/workflows/android-native.yml` (see
+   `03-testing-strategy.md` § CI) and
+   `integration_test/android_startup_test.dart`. The test runs the real
+   `main()` and `Stripe.instance.applySettings()` with no fakes. App config
+   was deliberately left unchanged so CI would show what actually fails.
+   **Result:** both matrix rows failed the first-ever native build at
+   `:app:checkDebugAarMetadata`: `flutter_local_notifications` requires core
+   library desugaring.
+2. **`79725db`** enabled desugaring. **Result:** the native build passed
+   on both rows. The APK installed on the emulator and
+   `booking_flow_test.dart` passed 2/2, its first real execution ever. Both
+   `android_startup_test` cases failed with `PlatformException(flutter_stripe
+   initialization failed … MainActivity is not a subclass
+   FlutterFragmentActivity)`. The second was thrown from `main.dart:15`,
+   so **the real app has never been able to start on Android**, at the
+   13.1.0 pin, independent of v14. The cause, from `stripe_android`'s
+   source: `StripeAndroidPlugin.onAttachedToActivity` records an
+   initialization error for any non-`FlutterFragmentActivity` host, and
+   `onMethodCall` then rejects every call, including `initialise`.
+3. **`b24dacc`** switched `MainActivity` to `FlutterFragmentActivity` and
+   moved the launch/normal themes to AppCompat/MaterialComponents parents,
+   mirroring flutter_stripe's own example app. **Result:** both rows were
+   green. Native build passed, and all 4 emulator integration tests passed
+   at 13.1.0 and at 14.1.0.
+
+**Verified (on GitHub's `ubuntu-latest` + API 34 x86_64 emulator, not in
+this sandbox):**
+- 14.1.0 compiles against this project's AGP 9.1.0 / Kotlin 2.4.0 /
+  `builtInKotlin=false` setup. The 13.1.0 build warns that stripe_android
+  applies KGP, which future Flutter versions will reject; 14.1.0 doesn't
+  apply KGP on AGP 9.
+- Stripe's native SDK initialises and the real `main()` reaches `runApp`
+  at both versions.
+
+**Not verified:** a real PaymentSheet flow (`initPaymentSheet` /
+`presentPaymentSheet` against a real PaymentIntent, which needs a live
+bookslot backend and real Stripe test keys: backlog #3/#4); iOS; release
+builds (R8/ProGuard rules from flutter_stripe's README step 7 aren't set
+up, and don't matter until minify is on); and backlog #9, scheduled
+reminders, which reading suggests are broken on Android.
+
+**Pin:** still `^13.1.0`. The workflow's evidence clears the
+native-build/emulator bar that held the bump back. Whether that's enough
+without a real PaymentSheet run is the maintainer's call, so the bump
+wasn't made here.

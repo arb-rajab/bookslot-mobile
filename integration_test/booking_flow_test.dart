@@ -22,13 +22,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// native, platform-owned sheet outside the Flutter widget tree), so this
 /// test stops at the point the app hands off to Stripe.
 ///
-/// **Environment note:** this repository's CI and the sandbox this app was
-/// built in have no Android emulator / iOS simulator / connected device
-/// available, so this suite has never actually been executed end-to-end —
-/// it is written against the real widget tree and API contracts, but is
-/// unverified by a real run. Running it for real (`flutter test
-/// integration_test` against a booted emulator, or `flutter drive`) is a
-/// tracked backlog item, not something this session could complete.
+/// Runs on a real Android emulator in `.github/workflows/android-native.yml`
+/// (first real run: 2026-09-26). It has never run on iOS. It pumps
+/// `BookslotMobileApp` directly and never runs `main()`, so native startup
+/// is covered separately by android_startup_test.dart.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 

@@ -123,6 +123,10 @@ Android build or an emulator. `dl.google.com` gets a proxy 403 on CONNECT,
 quick re-check:
 `curl -sS -o /dev/null -w '%{http_code}\n' https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml; ls /dev/kvm`
 (`000` plus "No such file" means it's still blocked). Don't reclone Flutter
-or install Gradle bits just to rediscover this. See
-`docs/project-memory/06-session-handoff.md`'s latest entry for the full
-probe list and ways to unblock it.
+or install Gradle bits just to rediscover this. Get native evidence from
+`.github/workflows/android-native.yml` instead: push, then read the job
+logs through the GitHub MCP tools. The Gradle build takes about 4 minutes
+and the emulator run about 10. Read a candidate row's job summary, not
+its check colour: candidate steps are allowed to fail. Hold a push until
+running rows finish, because the workflow's concurrency group cancels
+them. See `docs/project-memory/06-session-handoff.md`'s latest entry.

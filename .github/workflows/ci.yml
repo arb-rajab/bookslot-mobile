@@ -24,7 +24,6 @@ jobs:
 
       - run: flutter test --coverage
 
-      # integration_test/ needs a booted emulator/simulator or a connected
-      # device and is not runnable on a plain ubuntu-latest runner — see
-      # that file's own docblock and docs/project-memory/07-testing-strategy.md
-      # for why it's excluded here rather than silently skipped.
+      # integration_test/ needs a booted emulator, so it runs in
+      # android-native.yml instead (see
+      # docs/project-memory/03-testing-strategy.md).
