@@ -31,6 +31,10 @@ not by ease.
    reminder UX. Revisit only if a specific demo scenario needs a
    notification to arrive while the app is fully closed and the device has
    since rebooted (the one case local scheduling genuinely can't cover).
+   *Correction, 2026-09-26: a reboot is not that case. A reminder scheduled
+   before a reboot is re-armed and shown afterwards without opening the app
+   (#10, D-11). Still out of reach for local scheduling: reminders for
+   bookings made on another device, and changes made server-side.*
 6. **App icon / branding.** Ships with Flutter's default launcher icon.
    Cosmetic, not functional — lowest priority.
 7. **Timezone-aware slot display polish.** `SlotPickerScreen` converts
@@ -88,5 +92,37 @@ not by ease.
    After switching to inexact alarms, requesting the permission and
    declaring the receivers, the reminder was shown ~7 s after scheduling
    and the test passed (run `36266823630`). See `04-decisions.md` D-10.
-   **Still unverified:** Doze deferral of the inexact alarm, re-arming after
-   reboot, the permission-declined path, API levels other than 34, and iOS.
+   **Still unverified:** Doze deferral of the inexact alarm, the
+   permission-declined path, API levels other than 34, and iOS. (Re-arming
+   after a reboot was verified later: #10.)
+10. ~~**Does a scheduled reminder survive a device reboot?**~~ **Closed
+   2026-09-26: yes. Verified on an emulator; no app change needed.**
+   Android clears alarms on reboot. The plugin saves scheduled reminders
+   to SharedPreferences, and its `ScheduledNotificationBootReceiver` (in
+   the manifest since PR #6) re-arms them on `BOOT_COMPLETED`.
+   `.github/scripts/reboot-reminder-check.sh` now checks this in
+   `android-native.yml` on every relevant PR. It schedules a reminder
+   through the real `ReminderScheduler`, runs `adb reboot`, and then,
+   without opening the app, watches AlarmManager and the notification
+   shade. In run `36273855772` the alarm was back 18 s after boot
+   completed and the reminder was shown, 183 s after its scheduled time
+   (the inexact window; see #11). With the boot receiver removed, the same
+   check *(negative-control result pending)*. See `04-decisions.md` D-11.
+   **Still unverified:** a physical device; API levels other than 34;
+   OEM builds that restrict boot receivers or background starts; a device
+   that stays off past the reminder's time (the plugin re-arms a past
+   time, which AlarmManager normally fires at once, but this wasn't run);
+   a force-stopped app (Android cancels its alarms and holds back
+   `BOOT_COMPLETED` until the next launch, by design); Doze; iOS.
+11. **Inexact reminders can arrive well after their scheduled time.** Found
+   while verifying #10: on an awake API 34 emulator, AlarmManager gave the
+   reminder a delivery window of about 75% of the time left until it was
+   due. It delivered at the very end of that window (183 s late for a
+   reminder ~4 min out). If that scales, a "2 hours before" reminder
+   booked days ahead could arrive much closer to the appointment than 2
+   hours. AOSP may cap that window, but this wasn't checked. D-10 chose
+   inexact alarms assuming "typically minutes" of deferral. **Not
+   measured:** a real multi-hour lead. The fix options have tradeoffs
+   (e.g. `setWindow` with a bounded window, or exact alarms with their
+   permission costs, per D-10), so this is left for a decision rather than
+   changed here.

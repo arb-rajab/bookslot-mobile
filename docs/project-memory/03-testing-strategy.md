@@ -27,6 +27,18 @@
   `getActiveNotifications()` until it appears (backlog #9, D-10). It prints
   permission, exact-alarm and pending-request diagnostics, so a failure
   says which layer broke.
+- **Reboot check** (`.github/scripts/reboot-reminder-check.sh`), run on
+  the same emulator after the integration tests, because it reboots it.
+  It isn't a `flutter test`: a Dart test can't span a reboot, and `flutter
+  test` force-stops the app when it finishes, which cancels its alarms.
+  CI builds `integration_test/reboot_probe_main.dart` as a separate debug
+  APK. The script launches it once, and it schedules a reminder due in
+  5 minutes through the real `AppServices`/`ReminderScheduler`. The script
+  then confirms the app's alarm is in `dumpsys alarm`, runs `adb reboot`,
+  and, without reopening the app, polls `dumpsys alarm` and `dumpsys
+  notification` until the reminder is shown (backlog #10, D-11). It prints
+  when the alarm came back and how late the reminder was. A negative
+  control (boot receiver removed) made it fail.
 - **Permission prompts in emulator tests.** `integration_test` can't tap
   platform-owned UI, so `android-native.yml` runs the suite through
   `.github/scripts/run-integration-tests.sh`. That script runs
@@ -53,11 +65,12 @@
   running bookslot backend was available in this session either). If
   bookslot's public API shape changes, this app's tests would keep passing
   against stale fixtures. Tracked in `05-backlog.md`.
-- **Reminder edge cases on Android.** The emulator test covers the
-  "awake device, reminder due in seconds" case on API 34 only. Not
-  covered: Doze/idle deferral of the inexact alarm, re-arming after a
-  reboot (`ScheduledNotificationBootReceiver`), the user declining the
-  notification permission, and other API levels.
+- **Reminder edge cases on Android.** The emulator covers two cases, both
+  on API 34 with the device awake: a reminder due in seconds, and one that
+  has to survive a reboot. Not covered: Doze/idle deferral of the inexact
+  alarm, a real multi-hour lead (backlog #11), a device that stays off
+  past the reminder's time, a force-stopped app, the user declining the
+  notification permission, other API levels, and physical/OEM devices.
 - **Native Android anywhere but GitHub Actions.** The Claude cloud
   sandbox still can't run Gradle or an emulator (`dl.google.com` denied,
   no KVM; see `CLAUDE.md`). Native evidence comes only from
@@ -69,7 +82,8 @@
 - `.github/workflows/ci.yml` runs `dart format --set-exit-if-changed`,
   `flutter analyze` and `flutter test --coverage` on every push/PR.
 - `.github/workflows/android-native.yml` runs `flutter build apk --debug`,
-  then `flutter test integration_test` on an API 34 x86_64 emulator. It runs
+  builds the reboot probe APK, then runs `flutter test integration_test`
+  and the reboot check on an API 34 x86_64 emulator. It runs
   on PRs touching `pubspec*`, `android/**`, `integration_test/**`,
   `lib/main.dart`, `lib/services/reminder_scheduler.dart`, `.github/scripts/**`
   or the workflow itself, and on `workflow_dispatch`.
