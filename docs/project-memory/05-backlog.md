@@ -107,7 +107,8 @@ not by ease.
    shade. In run `36273855772` the alarm was back 18 s after boot
    completed and the reminder was shown, 183 s after its scheduled time
    (the inexact window; see #11). With the boot receiver removed, the same
-   check *(negative-control result pending)*. See `04-decisions.md` D-11.
+   check failed: no alarm came back and nothing was shown (run
+   `36275027018`). See `04-decisions.md` D-11.
    **Still unverified:** a physical device; API levels other than 34;
    OEM builds that restrict boot receivers or background starts; a device
    that stays off past the reminder's time (the plugin re-arms a past

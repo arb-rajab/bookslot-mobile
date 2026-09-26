@@ -224,8 +224,12 @@ Then, **without reopening the app**, it polls `dumpsys alarm` and
 - The reminder was shown 183 s after its scheduled time.
 
 The negative control removed the boot receiver from the manifest and
-changed nothing else (run PENDING, `8a69102`, reverted in `fe7e733`).
-*(Negative-control result pending.)*
+changed nothing else (run `36275027018`, `8a69102`, reverted in
+`fe7e733`). The same check then **failed**. The alarm was in AlarmManager
+before the reboot. The emulator rebooted in 38 s. After boot, no app alarm
+ever came back, and no reminder was shown even 480 s past its time. So
+the check does detect a reminder lost to a reboot, and in this build the
+boot receiver is what prevents that.
 
 Choices made:
 - **No app code change.** The plugin's persistence and boot receiver

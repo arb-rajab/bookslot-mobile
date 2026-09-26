@@ -436,9 +436,9 @@ test`: see D-11 and `CLAUDE.md`.
 
 | Commit | App change | Emulator result |
 |---|---|---|
-| `2fd2161` | none (check only) | **Pass** (run `36273855772`): alarm in AlarmManager before the reboot (`origWhen 21:59:24`, `window=+3m41s`). Rebooted in 30 s. Alarm back 18 s after boot completed, same `origWhen`, `window=+3m3s`. Reminder shown at 22:02:27, **183 s after its scheduled time**. The 4 existing integration tests passed too. |
-| `8a69102` | negative control: boot receiver removed from the manifest | *(pending)* |
-| `fe7e733` | revert of `8a69102` (manifest identical to `2fd2161`) | re-checked on the PR head, see below |
+| `2fd2161` | none (check only) | **Pass** (run `36273855772`): alarm in AlarmManager before the reboot (`origWhen 21:59:24`, `window=+3m41s`). Rebooted in 30 s. Alarm back 18 s after boot completed, same `origWhen`, `window=+3m3s`. Reminder shown at 22:02:27, **183 s after its scheduled time**. All 5 existing integration tests passed too. |
+| `8a69102` | negative control: boot receiver removed from the manifest | **Fail, as intended** (run `36275027018`): all 5 integration tests passed. The alarm was in AlarmManager before the reboot (`origWhen 22:20:57`). Rebooted in 38 s. After boot, no app alarm ever reappeared, and no reminder was shown 480 s past its time. |
+| `fe7e733` | revert of `8a69102` (manifest identical to `2fd2161`) | re-checked on the PR head (`android-native.yml` runs on the PR) |
 
 **Outcome: not a bug.** No app change was needed. The check stays in CI
 so a regression (manifest edit, plugin upgrade) fails a PR. Backlog #10 is
