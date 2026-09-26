@@ -49,6 +49,17 @@ class ReminderScheduler {
       return;
     }
 
+    // Android 13+ shows no notifications until the user grants
+    // POST_NOTIFICATIONS, and nothing else in the app asks for it. Ask
+    // here, the first time there's a reminder worth showing. Once the user
+    // has answered, this returns without prompting. It's a no-op on older
+    // Android, and null (skipped) on iOS.
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
+
     await _plugin.zonedSchedule(
       _notificationId(appointmentId),
       'Upcoming appointment',
@@ -58,7 +69,13 @@ class ReminderScheduler {
         android: _androidDetails,
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      // Inexact on purpose. Exact alarms need SCHEDULE_EXACT_ALARM, which
+      // Android 14 no longer pre-grants and the user must enable in
+      // Settings (without it zonedSchedule throws
+      // `exact_alarms_not_permitted`), or USE_EXACT_ALARM, which Play
+      // reserves for alarm-clock/calendar apps. A reminder two hours out
+      // doesn't need to land to the second. See 04-decisions.md D-10.
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
