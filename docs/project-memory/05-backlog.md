@@ -3,12 +3,11 @@
 Ordered roughly by what would most increase real confidence in this app,
 not by ease.
 
-1. **Run `integration_test/booking_flow_test.dart` for real**, against a
-   booted Android emulator or iOS simulator (`flutter test integration_test`
-   or `flutter drive`). Written and statically clean, never executed — no
-   device was available in this session's environment. This is the single
-   biggest gap between "looks right" and "proven right" in this repo right
-   now.
+1. ~~**Run `integration_test/` for real**~~: **closed on Android,
+   2026-09-26.** `android-native.yml` runs it on a KVM emulator on every
+   relevant PR. The first run found the app couldn't start on Android at
+   all (see `06-session-handoff.md`'s latest entry). **iOS is still never
+   built or run.**
 2. ~~**Self-service cancellation**~~ — **closed, Session 2.** bookslot
    shipped `POST /bookings/manage/{token}/cancel` (D-0052); this app's
    `MyBookingsScreen` now calls it for real, including the 409
@@ -40,8 +39,10 @@ not by ease.
    demo reviewer in a very different timezone than `demo-studio`'s
    `America/Toronto`. Worth a small "times shown in studio's local time"
    affordance if this becomes a real point of confusion in review.
-8. **Finish the `flutter_stripe` 13→14 step once a real native Android
-   build can be verified.** See `04-decisions.md` D-09. Code-level signals
+8. ~~**Finish the `flutter_stripe` 13→14 step once a real native Android
+   build can be verified.**~~ **Closed 2026-09-26: pin bumped to `^14.1.0`**
+   on the maintainer's go-ahead, after the native evidence below. The
+   history is kept as-is below. See `04-decisions.md` D-09. Code-level signals
    are good (14.1.0 passes `flutter analyze`/`flutter test` with zero
    changes, and this project's `android/app/build.gradle.kts` is already
    on AGP 9.1.0, which is v14's only real breaking change), but no session
@@ -53,3 +54,31 @@ not by ease.
    Android SDK) should bump `flutter_stripe` to `^14.1.0` in `pubspec.yaml`
    and run `flutter build apk --debug` before calling it verified — this
    is a small, mechanical step at that point, not a re-investigation.
+   **Update, 2026-09-26 (same later session): native evidence now exists,
+   from CI rather than the sandbox.** On `android-native.yml` (commit
+   `b24dacc`), the `14.1.0` candidate row passed both the native build
+   (AGP 9.1.0, `android.builtInKotlin=false`) and all 4 emulator
+   integration tests. That includes the real `main()` and Stripe native
+   initialisation. So did the pinned 13.1.0 row. **Still unverified at
+   either version:** `initPaymentSheet`/`presentPaymentSheet` against a
+   real PaymentIntent. That needs a live bookslot backend and real Stripe
+   test keys (#3, #4). The bump itself (`^14.1.0` in `pubspec.yaml`, after
+   which the candidate row can go) is now a decision for the maintainer,
+   not an environment blocker. The original re-check note follows.
+   **Re-checked 2026-09-26 (later session): still blocked.** `dl.google.com`
+   is still denied (403 on CONNECT), `maven.google.com` only 301-redirects
+   there, and there's still no KVM, `adb`, or device. The pin was left at
+   13.1.0 with no code change. See `06-session-handoff.md`'s latest entry
+   for the exact probes and two concrete ways to unblock it (allow
+   `dl.google.com` in this environment's network settings, or verify on a
+   GitHub-hosted runner with an Android SDK and emulator).
+9. **Scheduled reminders probably never fire on Android.** Found by
+   reading, not reproduced. Since v16, `flutter_local_notifications` no
+   longer declares its `ScheduledNotificationReceiver`/
+   `ScheduledNotificationBootReceiver` itself: the app's
+   `AndroidManifest.xml` must, and this app's doesn't. The app also never
+   requests `POST_NOTIFICATIONS` at runtime (Android 13+). `zonedSchedule`
+   doesn't throw without these, so nothing current catches it. Reproduce
+   on the emulator first (e.g. schedule a reminder a few seconds out and
+   assert it shows via `getActiveNotifications()`), then add the
+   receivers/permission per that plugin's README.

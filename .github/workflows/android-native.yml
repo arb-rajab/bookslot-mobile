@@ -1,0 +1,103 @@
+name: Android native
+
+# Real native Android evidence that ci.yml (Dart-only) and the Claude cloud
+# sandbox (no dl.google.com, no KVM) can't produce: a Gradle `flutter build
+# apk`, then integration_test/ on a booted, KVM-accelerated emulator. See
+# docs/project-memory/04-decisions.md D-09 and 05-backlog.md #8.
+#
+# Each matrix row is a flutter_stripe version. "pinned" is whatever
+# pubspec.lock commits and gates the PR; on PRs it's the only row. To gather
+# evidence for a future bump, dispatch with extra candidate versions, e.g.
+# ["pinned", "14.2.0"]. Candidate rows are evidence only: their build/emulator steps may fail without
+# failing the job (so they never block an unrelated PR), and the job's
+# summary plus a warning annotation say which step failed. A green
+# candidate *job* on its own therefore proves nothing; read its summary.
+
+on:
+  pull_request:
+    paths:
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'android/**'
+      - 'integration_test/**'
+      - 'lib/main.dart'
+      - '.github/workflows/android-native.yml'
+  workflow_dispatch:
+    inputs:
+      stripe_versions:
+        description: 'JSON list of flutter_stripe versions ("pinned" = as committed)'
+        default: '["pinned"]'
+
+concurrency:
+  group: android-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: flutter_stripe ${{ matrix.stripe }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        stripe: ${{ fromJSON(inputs.stripe_versions || '["pinned"]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Use flutter_stripe ${{ matrix.stripe }}
+        if: matrix.stripe != 'pinned'
+        run: flutter pub add "flutter_stripe:${{ matrix.stripe }}"
+
+      - run: flutter pub get
+
+      - name: Show resolved Stripe packages
+        run: grep -A7 -E '^  (flutter_stripe|stripe_android):$' pubspec.lock | grep -E '^  [a-z_]+:$|version:'
+
+      - name: Native debug build
+        id: build
+        continue-on-error: ${{ matrix.stripe != 'pinned' }}
+        run: flutter build apk --debug
+
+      - name: Enable KVM
+        if: steps.build.outcome == 'success'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: integration_test on emulator
+        id: emulator
+        if: steps.build.outcome == 'success'
+        continue-on-error: ${{ matrix.stripe != 'pinned' }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: flutter test integration_test -d emulator-5554 --reporter expanded
+
+      - name: Summary
+        if: always()
+        env:
+          STRIPE: ${{ matrix.stripe }}
+          BUILD: ${{ steps.build.outcome }}
+          EMULATOR: ${{ steps.emulator.outcome }}
+        run: |
+          line="flutter_stripe $STRIPE: native build=${BUILD:-not run}, emulator integration_test=${EMULATOR:-not run}"
+          echo "$line" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$BUILD" != success ] || [ "$EMULATOR" != success ]; then
+            echo "::warning title=Android native ($STRIPE)::$line"
+          fi
