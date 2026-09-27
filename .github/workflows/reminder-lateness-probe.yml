@@ -11,16 +11,6 @@ name: Reminder lateness probe
 # NOT equivalent to a real multi-day wait — see that script's header).
 
 on:
-  # Runs once, automatically, on the PR that introduces this workflow (a
-  # freshly-added workflow_dispatch-only workflow can't be dispatched via
-  # the API until it exists on the default branch — this is how its first
-  # run gets its real data before that merge). Removed again once that PR
-  # has its measurement; see docs/project-memory/05-backlog.md #11.
-  pull_request:
-    paths:
-      - '.github/workflows/reminder-lateness-probe.yml'
-      - '.github/scripts/reminder-lateness-check.sh'
-      - 'integration_test/lateness_probe_main.dart'
   workflow_dispatch:
     inputs:
       real_due_in_minutes:
