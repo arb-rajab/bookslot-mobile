@@ -98,14 +98,10 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          # Each line here runs as its own separate shell (see
+          # run-integration-tests.sh's header), so the repeat-count loop for
+          # each mode lives inside reminder-lateness-check.sh itself, not
+          # here.
           script: |
-            for i in $(seq 1 "$REAL_TRIALS"); do
-              echo "::group::Real-time trial $i/$REAL_TRIALS"
-              .github/scripts/reminder-lateness-check.sh build/lateness-probe-real.apk real
-              echo "::endgroup::"
-            done
-            for i in $(seq 1 "$JUMP_TRIALS"); do
-              echo "::group::Clock-jump trial $i/$JUMP_TRIALS"
-              .github/scripts/reminder-lateness-check.sh build/lateness-probe-jump.apk jump "$JUMP_LEEWAY_SECONDS"
-              echo "::endgroup::"
-            done
+            .github/scripts/reminder-lateness-check.sh build/lateness-probe-real.apk real "$REAL_TRIALS"
+            .github/scripts/reminder-lateness-check.sh build/lateness-probe-jump.apk jump "$JUMP_TRIALS" "$JUMP_LEEWAY_SECONDS"
