@@ -11,6 +11,16 @@ name: Reminder lateness probe
 # NOT equivalent to a real multi-day wait — see that script's header).
 
 on:
+  # Runs once, automatically, on the PR that introduces this workflow (a
+  # freshly-added workflow_dispatch-only workflow can't be dispatched via
+  # the API until it exists on the default branch — this is how its first
+  # run gets its real data before that merge). Removed again once that PR
+  # has its measurement; see docs/project-memory/05-backlog.md #11.
+  pull_request:
+    paths:
+      - '.github/workflows/reminder-lateness-probe.yml'
+      - '.github/scripts/reminder-lateness-check.sh'
+      - 'integration_test/lateness_probe_main.dart'
   workflow_dispatch:
     inputs:
       real_due_in_minutes:
@@ -38,6 +48,14 @@ jobs:
     name: Reminder lateness probe
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    # inputs.* is only populated for workflow_dispatch; the pull_request
+    # trigger (see above) falls back to the same defaults.
+    env:
+      REAL_DUE_IN_MINUTES: ${{ inputs.real_due_in_minutes || '15' }}
+      JUMP_DUE_IN_MINUTES: ${{ inputs.jump_due_in_minutes || '4200' }}
+      JUMP_LEEWAY_SECONDS: ${{ inputs.jump_leeway_seconds || '600' }}
+      REAL_TRIALS: ${{ inputs.real_trials || '2' }}
+      JUMP_TRIALS: ${{ inputs.jump_trials || '1' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -56,13 +74,13 @@ jobs:
       - name: Build real-time-trial probe APK
         run: |
           flutter build apk --debug -t integration_test/lateness_probe_main.dart \
-            --dart-define=DUE_IN_MINUTES=${{ inputs.real_due_in_minutes }}
+            --dart-define=DUE_IN_MINUTES="$REAL_DUE_IN_MINUTES"
           cp build/app/outputs/flutter-apk/app-debug.apk build/lateness-probe-real.apk
 
       - name: Build clock-jump-trial probe APK
         run: |
           flutter build apk --debug -t integration_test/lateness_probe_main.dart \
-            --dart-define=DUE_IN_MINUTES=${{ inputs.jump_due_in_minutes }}
+            --dart-define=DUE_IN_MINUTES="$JUMP_DUE_IN_MINUTES"
           cp build/app/outputs/flutter-apk/app-debug.apk build/lateness-probe-jump.apk
 
       - name: Enable KVM
@@ -81,13 +99,13 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: |
-            for i in $(seq 1 ${{ inputs.real_trials }}); do
-              echo "::group::Real-time trial $i/${{ inputs.real_trials }}"
+            for i in $(seq 1 "$REAL_TRIALS"); do
+              echo "::group::Real-time trial $i/$REAL_TRIALS"
               .github/scripts/reminder-lateness-check.sh build/lateness-probe-real.apk real
               echo "::endgroup::"
             done
-            for i in $(seq 1 ${{ inputs.jump_trials }}); do
-              echo "::group::Clock-jump trial $i/${{ inputs.jump_trials }}"
-              .github/scripts/reminder-lateness-check.sh build/lateness-probe-jump.apk jump ${{ inputs.jump_leeway_seconds }}
+            for i in $(seq 1 "$JUMP_TRIALS"); do
+              echo "::group::Clock-jump trial $i/$JUMP_TRIALS"
+              .github/scripts/reminder-lateness-check.sh build/lateness-probe-jump.apk jump "$JUMP_LEEWAY_SECONDS"
               echo "::endgroup::"
             done
