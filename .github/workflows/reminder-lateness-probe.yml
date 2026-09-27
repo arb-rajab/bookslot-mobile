@@ -101,7 +101,10 @@ jobs:
           # Each line here runs as its own separate shell (see
           # run-integration-tests.sh's header), so the repeat-count loop for
           # each mode lives inside reminder-lateness-check.sh itself, not
-          # here.
+          # here. `|| true` on the first line so a real-trial failure
+          # doesn't stop the (independent) jump trial from running too; the
+          # job's own step still reports failure via each script's own exit
+          # code being echoed below.
           script: |
-            .github/scripts/reminder-lateness-check.sh build/lateness-probe-real.apk real "$REAL_TRIALS"
-            .github/scripts/reminder-lateness-check.sh build/lateness-probe-jump.apk jump "$JUMP_TRIALS" "$JUMP_LEEWAY_SECONDS"
+            .github/scripts/reminder-lateness-check.sh build/lateness-probe-real.apk real "$REAL_TRIALS"; echo "real trials exit=$?"
+            .github/scripts/reminder-lateness-check.sh build/lateness-probe-jump.apk jump "$JUMP_TRIALS" "$JUMP_LEEWAY_SECONDS"; echo "jump trials exit=$?"

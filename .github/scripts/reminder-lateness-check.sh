@@ -43,7 +43,11 @@ TRIALS=${3:?usage: reminder-lateness-check.sh <probe apk> <real|jump> <trials> [
 JUMP_LEEWAY_S=${4:-600}
 PKG=com.bookslot.bookslot_mobile
 TITLE='Upcoming appointment'
-GRACE_S=480
+# 480s (the reboot check's own grace) turned out too short here: at a ~15
+# minute due-time scale the AlarmManager window itself is ~11 minutes (see
+# backlog #11), so maxWhenElapsed can land well past due+480s. 1800s covers
+# that comfortably without costing much extra when delivery is on time.
+GRACE_S=1800
 
 log() { echo "lateness-check[$MODE #$trial]: $*"; }
 summary() {
