@@ -252,3 +252,89 @@ i.e. about 75% of the time remaining. Delivery came right at the end of
 the second window. D-10 assumed inexact deferral would be "typically
 minutes". It isn't measured for a real reminder scheduled hours or days
 ahead, so it's tracked separately (backlog #11) and not changed here.
+
+**D-12. Measured inexact-reminder lateness at product scale (backlog
+#11): AlarmManager's window is capped, not proportional without bound —
+this does not look like a real customer-facing problem, but only two
+data points exist at the large scale.** D-11 found a ~75%-of-remaining
+window at a ~4 minute scale and flagged that, if that ratio scaled
+unboundedly, a "2 hours before" reminder booked days ahead could arrive
+much later than promised (in principle tens of hours late). This
+session measured it directly on an API 34 emulator
+(`integration_test/lateness_probe_main.dart` +
+`.github/scripts/reminder-lateness-check.sh`, dispatched by a new,
+dispatch-only `reminder-lateness-probe.yml`, briefly also wired to
+`pull_request` to get this PR's own first run — see that workflow's
+`on:` history), scheduling through the real
+`AppServices`/`ReminderScheduler` with the product's real 2-hour lead
+time throughout; only how far out the alarm was due was varied.
+
+Two trial types, three trials total, all in run `36307134341`:
+
+- **Real elapsed wait, ~15 minute scale (2 trials, no simulation of any
+  kind — full real wall-clock time, moderately larger than D-11's ~4
+  minute case).** Both trials show the same ~75% window AlarmManager
+  reported at the ~4 minute scale, holding almost exactly at ~15 minutes
+  too:
+  - Trial 1: interval 886s, window `+11m8s688ms` (668.7s, 75.5% of the
+    interval). Reminder shown 512s after its scheduled time — 57.8% of
+    the interval, i.e. inside the window but not at its far edge.
+  - Trial 2: interval 892s, window `+11m12s363ms` (672.4s, 75.4%).
+    Reminder shown 592s late — 66.4% of the interval.
+  So the ~75% *window* ratio replicates cleanly at ~4x the scale D-11
+  measured it at, but actual delivery lateness varies within that
+  window (57.8% and 66.4% here, not "always at the very end" as D-11's
+  single data point suggested) — call it "somewhere in the back half of
+  the window," not a fixed point.
+- **Clock-jumped, ~70 hour scale (1 trial only — see limitations
+  below).** A reminder scheduled with `startsAt` ~3 days out (a genuine
+  "booked days ahead" shape, 251991s/~70h from scheduling to due, lead
+  time still the product's real 2 hours) got, immediately after
+  scheduling and **before any clock manipulation**, a real,
+  un-simulated AlarmManager reading of `window=+1h0m0s0ms` — exactly one
+  hour, not ~75% of the 70 hour interval (which would have been ~52
+  hours). This is the key finding: **the window does not grow without
+  bound as the interval grows; it's capped, and the cap looks like
+  exactly one hour.** After jumping the device clock forward 69 hours
+  (via `adb root` + `adb shell date`, confirmed to actually take effect)
+  to leave 600s of real time before the reminder was due, AlarmManager
+  recalculated the alarm and still reported the same `window=+1h0m0s0ms`
+  cap (`maxWhenElapsed` about 70 minutes past the jump point). The
+  reminder was actually shown only **180s (3 minutes) after its
+  scheduled time** in the real elapsed time that followed the jump —
+  well inside the capped window, near its front rather than its back.
+
+**What this does and doesn't show.** The two ~15-minute trials are
+uncomplicated real-elapsed-time evidence: nothing was simulated, and
+they replicate D-11's ratio almost exactly at a larger scale. The ~70
+hour trial's AlarmManager *window* reading (the 1-hour cap) is equally
+real and un-simulated — it's what AlarmManager reported immediately
+after a normal, real `zonedSchedule` call, before the clock was touched.
+Its *delivery* reading (180s late) is not on the same footing: getting
+there required skipping ~69 hours of wall-clock time with `adb shell
+date` rather than actually waiting it out, so it does not exercise
+whatever Android would normally do with the device over a real 3-day
+span — Doze/App Standby bucket transitions depend on real elapsed idle
+time, screen state, charging, and motion, none of which happened here.
+An abrupt system clock jump is also not a normal event from
+AlarmManager's point of view (it did visibly trigger a full alarm
+recalculation, which is itself informative, but that recalculation path
+may not be identical to letting the same 69 hours elapse for real).
+Treat "the alarm survived the jump and delivered promptly afterward" as
+a positive sign, not as confirmation that a genuine multi-day wait would
+behave identically — that full real-time confirmation is still not
+done, and would cost roughly 3 days of a CI job to get.
+
+**Does this look like a real customer-facing problem at 2-hour/days-ahead
+scale?** Based on what was measured: **no, not obviously** — the
+1-hour cap, if it holds in general (only one trial reached this scale),
+bounds the worst case to roughly an hour of lateness, not the tens of
+hours the unbounded-75%-extrapolation in backlog #11 worried about, and
+the one large-scale trial that was run delivered promptly (3 minutes
+late) rather than near the theoretical worst case. But this rests on a
+single large-scale trial with a clock-jump for the wait portion, not a
+repeated or fully real-time-confirmed one. Whether an up-to-~1-hour
+worst case is acceptable for a "2 hours before" promise, and whether
+it's worth spending more CI time (or a real multi-day run, or repeat
+trials) to firm up the cap finding before deciding, is a product call —
+not made here. See backlog #11.

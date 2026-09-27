@@ -115,15 +115,47 @@ not by ease.
    time, which AlarmManager normally fires at once, but this wasn't run);
    a force-stopped app (Android cancels its alarms and holds back
    `BOOT_COMPLETED` until the next launch, by design); Doze; iOS.
-11. **Inexact reminders can arrive well after their scheduled time.** Found
-   while verifying #10: on an awake API 34 emulator, AlarmManager gave the
-   reminder a delivery window of about 75% of the time left until it was
-   due. It delivered at the very end of that window (183 s late for a
-   reminder ~4 min out). If that scales, a "2 hours before" reminder
-   booked days ahead could arrive much closer to the appointment than 2
-   hours. AOSP may cap that window, but this wasn't checked. D-10 chose
-   inexact alarms assuming "typically minutes" of deferral. **Not
-   measured:** a real multi-hour lead. The fix options have tradeoffs
-   (e.g. `setWindow` with a bounded window, or exact alarms with their
-   permission costs, per D-10), so this is left for a decision rather than
-   changed here.
+11. ~~**Inexact reminders can arrive well after their scheduled
+   time.**~~ **Measured 2026-09-27: the ~75% window doesn't grow
+   unbounded — it's capped, and the cap looks like exactly one hour.**
+   Found while verifying #10: on an awake API 34 emulator, AlarmManager
+   gave a ~4-minute-out reminder a delivery window of about 75% of the
+   time left until it was due, delivered 183 s late at the end of that
+   window. The worry was that this ratio might scale unboundedly, so a
+   "2 hours before" reminder booked days ahead could arrive much closer
+   to the appointment than 2 hours (in principle tens of hours late).
+   This session measured it directly (`integration_test/lateness_probe_main.dart`,
+   `.github/scripts/reminder-lateness-check.sh`, run `36307134341`),
+   scheduling through the real `ReminderScheduler` (real 2-hour lead
+   time throughout):
+   - At a ~15 minute scale (2 real-elapsed-time trials, no simulation):
+     the ~75% *window* ratio held almost exactly (75.5% and 75.4% of the
+     interval). Actual delivery landed within the window but not always
+     at its far edge (57.8% and 66.4% of the interval into the wait,
+     across the two trials) — some real trial-to-trial variance.
+   - At a ~70 hour scale (booking ~3 days ahead, 1 trial): immediately
+     after scheduling, AlarmManager's window was `+1h0m0s0ms` — exactly
+     one hour, **not** ~75% of the 70-hour interval (which would have
+     been ~52 hours). This is the headline finding: the window is
+     capped, not proportional without bound. Confirming actual delivery
+     at this scale meant jumping the emulator's clock forward ~69 hours
+     (`adb root` + `adb shell date`) rather than waiting it out in real
+     time — the reminder was then shown 180 s (3 min) after its
+     scheduled time, comfortably inside the capped window. That
+     clock-jumped portion is **not** on the same footing as the ~15
+     minute trials: it skips whatever Android would do with a device
+     over a real 3-day span (Doze/App Standby bucket transitions
+     depend on real elapsed idle time, not a wall-clock jump), so it's
+     a real, but weaker, confirmation than the two ~15-minute trials.
+   See D-12 for the full write-up and caveats. **Does this look like a
+   real customer-facing problem?** Based on what was measured, not
+   obviously — the ~1-hour cap (if it generalizes) bounds worst-case
+   lateness well below the tens-of-hours scenario that motivated this
+   backlog item. But it rests on a single large-scale trial with a
+   clock-jump for its wait portion, not a repeated one or a fully
+   real-time-confirmed one (a genuine multi-day real-time trial was not
+   attempted — it would cost roughly 3 days of CI time). Whether the
+   ~1-hour worst case is acceptable for a "2 hours before" promise is a
+   product decision, not made here; the fix options from D-10 (`setWindow`
+   with a bounded window, or exact alarms with their permission costs)
+   remain on the table if it isn't.
