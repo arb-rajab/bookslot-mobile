@@ -20,7 +20,12 @@ name: Reminder lateness probe
 # jobs/days, which is out of scope for this one-off measurement). Defaults
 # to 0 trials so a plain dispatch behaves exactly as before; set
 # `long_real_trials=1` (and set `real_trials`/`jump_trials` to `0` to stay
-# well under the 6-hour cap in the same run) to actually run it.
+# well under the 6-hour cap in the same run) to actually run it. See D-13
+# (docs/project-memory/04-decisions.md) for what the first two runs of
+# this found — delivery landing at the very far edge of the ~1-hour
+# window, not near the front like D-12's clock-jumped trial — and for why
+# the grace default here needs real margin past that window, not just
+# equal to it.
 
 on:
   workflow_dispatch:
@@ -41,11 +46,11 @@ on:
         description: 'How many times to repeat the clock-jump trial'
         default: '1'
       long_real_due_in_minutes:
-        description: 'Long real-elapsed trial: minutes from "now" until due (default 240 = 4h, the longest that reliably fits one 6h-capped CI job alongside build/boot/grace overhead)'
-        default: '240'
+        description: 'Long real-elapsed trial: minutes from "now" until due (default 180 = 3h; see D-13 for why this and the grace default below are sized the way they are)'
+        default: '180'
       long_real_grace_seconds:
-        description: 'Long real-elapsed trial: how long past the due time to keep waiting for delivery before calling it a failure'
-        default: '3600'
+        description: 'Long real-elapsed trial: how long past the due time to keep waiting for delivery before calling it a failure. D-13''s first run set this equal to the observed ~3600s (1h) AlarmManager window width, with no margin, and the check hit its deadline and reported FAIL a few seconds before diagnostics confirmed the reminder had actually just been shown — real delivery in these trials lands at the very edge of the window, not safely inside it. Keep this comfortably larger than the window (default 2h, i.e. 2x the observed 1h cap) so a real PASS can actually be observed.'
+        default: '7200'
       long_real_trials:
         description: 'How many times to repeat the long real-elapsed trial (0 = skip; this is what actually opts into it)'
         default: '0'
@@ -70,8 +75,8 @@ jobs:
       JUMP_LEEWAY_SECONDS: ${{ inputs.jump_leeway_seconds || '600' }}
       REAL_TRIALS: ${{ inputs.real_trials || '2' }}
       JUMP_TRIALS: ${{ inputs.jump_trials || '1' }}
-      LONG_REAL_DUE_IN_MINUTES: ${{ inputs.long_real_due_in_minutes || '240' }}
-      LONG_REAL_GRACE_SECONDS: ${{ inputs.long_real_grace_seconds || '3600' }}
+      LONG_REAL_DUE_IN_MINUTES: ${{ inputs.long_real_due_in_minutes || '180' }}
+      LONG_REAL_GRACE_SECONDS: ${{ inputs.long_real_grace_seconds || '7200' }}
       LONG_REAL_TRIALS: ${{ inputs.long_real_trials || '0' }}
     steps:
       - uses: actions/checkout@v4

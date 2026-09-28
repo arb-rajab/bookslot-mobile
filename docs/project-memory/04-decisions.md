@@ -338,3 +338,104 @@ worst case is acceptable for a "2 hours before" promise, and whether
 it's worth spending more CI time (or a real multi-day run, or repeat
 trials) to firm up the cap finding before deciding, is a product call —
 not made here. See backlog #11.
+
+**D-13. Two real-elapsed trials (no clock jump) confirm the ~1-hour
+AlarmManager window cap from D-12, but show actual delivery landing at
+the far edge of that window, not near the front as D-12's single
+clock-jumped trial suggested.** D-12's ~70-hour-scale trial got its
+delivery reading (180s/3min late) by jumping the emulator's clock
+forward for the wait, which the D-12 write-up flagged as weaker
+evidence than a real wait: a clock jump skips whatever Doze/App Standby
+bucket transitions a real idle device goes through over that span. This
+session tried to close that gap with a genuine real-elapsed wait at
+product scale (real `AppServices`/`ReminderScheduler`, real 2-hour lead
+time, API 34 emulator), reusing `lateness_probe_main.dart` /
+`reminder-lateness-check.sh` with a new `long_real_*` trial mode added
+to `reminder-lateness-probe.yml` for this measurement.
+
+**A genuine ~70-hour real-elapsed wait does not fit in one CI job.**
+GitHub Actions hard-caps a GitHub-hosted runner job at 6 hours of
+execution time regardless of `timeout-minutes`; spanning a real ~70-hour
+wait across multiple jobs/days was out of scope for this one-off
+measurement. The longest due-time scale that reliably fits one job
+alongside build/boot/grace overhead is a few hours — well short of
+D-12's ~70-hour clock-jumped scale, but still a real, un-simulated wait
+many times longer than D-11/D-12's ~15-minute real-elapsed trials.
+
+Two trials, both scheduled with the real 2-hour lead time and waited
+out entirely in real elapsed time (no clock manipulation at all):
+
+- **Run `36356883865`, due time 180 min (~3h) out, grace 7200s (2h) —
+  clean, exact reading.** Scheduled at 2026-09-27T23:04:40Z, due at
+  2026-09-28T02:04:33Z (10788s/~3h interval). AlarmManager's window
+  immediately after scheduling: `window=+1h0m0s0ms` — the same 1-hour
+  cap D-12 found at the ~70-hour scale, now confirmed at a ~3-hour
+  scale too (`whenElapsed=+2h59m47s89ms maxWhenElapsed=+3h59m47s89ms`).
+  The reminder was shown at 2026-09-28T03:04:33Z — **exactly 3600s (60
+  min) after its scheduled time, ±2s polling: 33.4% of the 10788s
+  scheduling-to-due interval, and 100% of the 3600s window.** Delivery
+  landed at the very far edge of the capped window, not somewhere
+  inside it.
+- **Run `36337821897`, due time 240 min (~4h) out, grace 3600s (1h) —
+  corroborating but not exact.** Scheduled with a 14384s (~4h) interval,
+  due at 2026-09-27T21:50:18Z, same `window=+1h0m0s0ms` cap reading.
+  This trial's grace period was set to exactly 3600s (the window's own
+  width), with no buffer past it, so the check's polling loop hit its
+  deadline and logged `FAIL: no reminder shown, 3600 s past its
+  scheduled time` before ever seeing it appear. The diagnostics dump
+  taken immediately afterward (within ~1s of the FAIL), however, shows
+  the reminder notification *had* posted by then
+  (`NotificationRecord(...channel=appointment_reminders...seen=true)`).
+  So real delivery in this trial was also at essentially the 3600s/100%-
+  of-window mark — consistent with the second run's exact reading — but
+  not pinned to a precise second, because the grace period left no
+  margin to catch the actual moment. (This run's own grace-sizing
+  mistake is fixed for future use: `long_real_grace_seconds` should
+  always be set well past the expected window, not equal to it.)
+
+**Compared with D-12's clock-jumped ~70h trial (window `+1h0m0s0ms`,
+delivered 180s/3min late — about 5% into the window, near its front
+edge):** both real-elapsed trials here found the same window cap, but
+landed at the *opposite* end of it — essentially 100% of the window
+used (~3600s/1h late) rather than ~5%. That is a real, material
+divergence, not noise: it shows up consistently across both real-
+elapsed trials (one exact, one corroborating), at two different
+due-time scales (3h and 4h), both landing at the same ~3600s mark
+rather than scattering. The most direct explanation is that a real
+idle device (screen off, unplugged, no motion — Doze territory) delays
+inexact-alarm delivery toward the far edge of whatever window
+AlarmManager grants it, an effect a clock jump cannot reproduce because
+it skips the real idle time Doze/App Standby transitions depend on.
+
+**What this does and doesn't show.** These two trials are real,
+un-simulated evidence for delivery landing at the back edge of the
+1-hour cap at the 3-4 hour scale — a materially worse practical result
+than D-12's single clock-jumped data point (3 min late) suggested, even
+though the *window* cap itself (1 hour) is unchanged and still well
+below the tens-of-hours worst case the original backlog #11 concern
+was about. Still open: whether this same back-edge pattern holds, gets
+worse, or changes at the true ~70-hour/multi-day scale that motivated
+backlog #11 in the first place — neither trial here reached that scale
+(the 6-hour CI job cap is the reason), and D-12's own ~70-hour data
+point used a clock jump, so no real-elapsed trial has yet reached
+anywhere near that scale. Doze state itself was not independently
+confirmed via `dumpsys deviceidle` or similar during either wait — the
+inference that Doze is the mechanism rests on elapsed idle time and the
+window-edge timing pattern, not a direct measurement of the device's
+idle bucket.
+
+**Is the evidence now strong enough to support a decision?** More than
+before, but not complete. What's now known: the 1-hour window cap
+replicates from a ~3-hour real-elapsed scale up through D-12's
+~70-hour clock-jumped scale, and — new in this session — real-elapsed
+delivery (not clock-jumped) consistently lands at the far edge of that
+window rather than near the front, in both trials that measured it.
+What's still missing: a real-elapsed trial at the actual multi-day
+scale that motivated backlog #11 (blocked by the CI job's 6-hour hard
+cap in this environment), repeat trials at the 3-4 hour scale to rule
+out this being a two-data-point coincidence, and direct Doze-state
+confirmation. Whether a worst-case ~1-hour-late "2 hours before"
+reminder — now looking like the *typical* real-elapsed outcome rather
+than a rare tail case — is acceptable, or whether this new evidence
+tips the balance toward `setWindow`/exact alarms, is a product call —
+not made here. See backlog #11.

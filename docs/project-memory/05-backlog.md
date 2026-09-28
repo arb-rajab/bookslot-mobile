@@ -159,3 +159,16 @@ not by ease.
    product decision, not made here; the fix options from D-10 (`setWindow`
    with a bounded window, or exact alarms with their permission costs)
    remain on the table if it isn't.
+   **Update, 2026-09-28: two real-elapsed (no clock jump) trials at
+   3-4 hour scale confirm the same 1-hour window cap, but both land
+   delivery at the *far edge* of that window (~3600s/100% of it), not
+   near the front like D-12's clock-jumped trial (180s/~5% of it).**
+   This is a materially less optimistic result than D-12's framing —
+   the ~1-hour worst case looks like the typical real-elapsed outcome,
+   not a rare tail. A true multi-day real-elapsed trial (the actual
+   scale this backlog item is about) still hasn't been run: GitHub
+   Actions hard-caps a hosted-runner job at 6 hours, so it doesn't fit
+   in one CI job at all. See D-13 for the full write-up, exact numbers,
+   and what's still missing. Still not making the fix-or-accept call
+   here — that's the product decision D-12 already deferred, now with
+   somewhat stronger and somewhat less reassuring evidence behind it.
