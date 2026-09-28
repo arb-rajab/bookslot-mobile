@@ -577,3 +577,47 @@ call, made directly in the GitHub UI, not something this session
 determined was in scope or asked for — recorded here for completeness
 since it changes `main`'s actual protection state beyond what this
 decision's "change needed" section above called for.
+
+**D-16. Added `android-native-skip.yml` so a required `flutter_stripe
+pinned` check doesn't block docs-only (or otherwise non-Android) PRs
+forever.** Once D-15's required-check change was applied, the very next
+PR that touched only `docs/project-memory/04-decisions.md` (#12) came
+back with `mergeable_state: "blocked"` — `flutter_stripe pinned` is
+path-filtered to Android-relevant files (`android/**`,
+`integration_test/**`, `pubspec*`, etc.) in `android-native.yml`, so a
+docs-only change never triggers it, and a required check that never runs
+never resolves. This isn't specific to that one PR; any future PR
+outside those paths hits the same permanent block.
+
+**Fix: GitHub's own documented workaround for this exact gap** (a second
+workflow, triggered on the inverse path set via `paths-ignore`, with a
+job named to match the required check's exact name and an immediate
+pass). `android-native-skip.yml`'s `paths-ignore` list is kept identical
+to `android-native.yml`'s `paths` list by construction — verified equal
+programmatically when written — so the two workflows are triggered by
+complementary (not identical) path sets. Its one job is named exactly
+`flutter_stripe pinned` so GitHub treats it as satisfying the same
+required check.
+
+**Known limitation, accepted as-is (per GitHub's own docs on this
+pattern):** a PR that changes a mix of Android and non-Android paths
+triggers *both* workflows, producing two check runs sharing the name
+`flutter_stripe pinned` — the real job and this skip job. That's
+tolerated deliberately rather than engineered around: the skip job's
+immediate pass doesn't retroactively hide a later failure from the real
+job, since both report independently under the same name and GitHub
+surfaces both; a genuine regression in the real job still shows as a
+failing check that blocks merge. The only actual gap this doesn't cover
+is the very rare case where the real job is still in `pending` and the
+skip job's near-instant pass is what GitHub evaluates at the moment
+someone attempts to merge — not observed in this session, not
+specifically tested here, and considered acceptable risk given it's
+GitHub's own recommended pattern for this exact problem, not something
+invented for this repo.
+
+**Emulator-evidence CI cost, unchanged.** This doesn't touch
+`android-native.yml` itself — the real `flutter_stripe pinned` job (with
+its native build and emulator regression tests) still runs exactly when
+it always has, on Android-relevant path changes. `android-native-skip.yml`
+only fires on the complementary path set and its job is a single `echo`
+step — no build, no emulator, seconds of runtime.
