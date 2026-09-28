@@ -621,3 +621,90 @@ its native build and emulator regression tests) still runs exactly when
 it always has, on Android-relevant path changes. `android-native-skip.yml`
 only fires on the complementary path set and its job is a single `echo`
 step — no build, no emulator, seconds of runtime.
+
+**D-17. Independently re-verified D-16's `android-native.yml` /
+`android-native-skip.yml` path-filter complement — no gap, no dangerous
+overlap found; nothing changed.** D-16 claimed the two lists were
+"verified equal programmatically when written," but that claim itself had
+never been checked by a later session, and getting this wrong has two
+distinct failure modes: a gap (neither workflow fires, reproducing PR
+#10's original permanent-pending block) or a silent-bypass overlap (a
+real Android/reminder/reboot regression matches only the skip workflow's
+trigger, so it merges on an automatic pass without the emulator ever
+running). This session re-derived the logic from the files as committed,
+not from D-16's prose.
+
+**The two `paths` lists are byte-for-byte identical**, confirmed with
+`diff` against the raw YAML (both list exactly these 8 patterns:
+`pubspec.yaml`, `pubspec.lock`, `android/**`, `integration_test/**`,
+`lib/main.dart`, `lib/services/reminder_scheduler.dart`,
+`.github/workflows/android-native.yml`, `.github/scripts/**`) — the only
+textual difference between the two `on.pull_request` blocks is the key
+itself: `paths:` in `android-native.yml` vs. `paths-ignore:` in
+`android-native-skip.yml`.
+
+**Why identical lists under `paths` vs. `paths-ignore` are a true
+complement, not just "probably fine" (GitHub's own documented
+semantics):** `paths` triggers a workflow if *at least one* changed file
+matches a pattern in the list; `paths-ignore` skips a workflow only if
+*every* changed file matches a pattern in the list (i.e. it triggers if
+at least one changed file matches *none* of the patterns). Call the
+8-pattern set `L`. For any nonempty set of changed files in a PR, exactly
+one of two things is true: either every file is in `L`, or at least one
+file is not in `L`. In the first case `android-native.yml` triggers
+(some/all files match `L`) and `android-native-skip.yml` does not (no
+file fails to match `L`). In the second case `android-native-skip.yml`
+triggers (that one file fails to match `L`); `android-native.yml` also
+triggers *if and only if* some other changed file in the same PR happens
+to also be in `L` — the documented "mixed PR" case below. Either way, at
+least one of the two always fires — **no path exists that satisfies
+neither trigger, so there is no gap.**
+
+**Stress-tested the overlap case directly, per-file, against `L`:**
+`android/app/build.gradle.kts`, `android/app/src/main/AndroidManifest.xml`,
+`android/app/src/main/kotlin/com/bookslot/bookslot_mobile/MainActivity.kt`,
+`lib/services/reminder_scheduler.dart`, `integration_test/reboot_probe_main.dart`,
+`integration_test/reminder_delivery_test.dart`,
+`.github/scripts/reboot-reminder-check.sh`, and `pubspec.lock` each match
+one of `L`'s 8 patterns and so cannot, on their own, cause
+`android-native-skip.yml` to fire while leaving `android-native.yml`
+silent — matching `L` always satisfies `android-native.yml`'s `paths`
+condition directly. There is no path in this repo that is
+Android/reminder/reboot-relevant by the criteria D-10 through D-14 built
+regression coverage for, yet falls outside `L`; the list was built
+directly from those same paths in D-16.
+
+**Verified the gap case with non-`L` paths:** `README.md`,
+`lib/screens/*.dart` (any screen file), and
+`.github/workflows/ci.yml` all fall outside `L`, so each alone triggers
+`android-native-skip.yml` only (its `paths-ignore` fires because that one
+file doesn't match `L`) — never neither.
+
+**One asymmetry noted, deliberately out of scope:**
+`.github/workflows/android-native.yml` is itself inside `L` (so editing
+it always forces the real job to run), but
+`.github/workflows/android-native-skip.yml` is *not* in `L` — editing
+only the skip file triggers the skip workflow, not the real one. This
+isn't a "gap" under this decision's own definition (exactly one workflow
+still fires, so the required check still resolves), but it does mean a
+change to the bypass mechanism's own trigger logic isn't itself gated by
+a real Android CI run. Not fixed here — flagged for whoever next touches
+`android-native-skip.yml`'s trigger, since fixing it would mean adding
+`.github/workflows/android-native-skip.yml` to `L`, which is a real
+(if narrow) behavior change, not a re-verification.
+
+**Confirmed the "mixed PR" case D-16 already documented is not a silent
+bypass.** A PR touching both an `L` file and a non-`L` file triggers
+*both* workflows (per the case analysis above), producing two check runs
+named `flutter_stripe pinned`. Since `android-native.yml` still ran and
+reports its own real result independently, a genuine regression in it
+still shows as a failing check regardless of the skip job's immediate
+pass — this was D-16's claim and this session's independent re-derivation
+of the trigger logic confirms it rather than just re-stating it.
+
+**Outcome: no code or workflow change made.** The path-filter pair is
+correct as committed. This decision's own PR (docs-only, touching only
+this file) is itself a live instance of the gap check: it matches no
+pattern in `L`, so it exercises exactly the `android-native-skip.yml`
+path this write-up analyzes, while `android-native.yml` correctly does
+not run for it.
