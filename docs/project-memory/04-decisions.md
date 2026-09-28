@@ -565,6 +565,19 @@ this session's scope to fix (tracked separately) — but an occasional
 flaky retry gating merge is the intended tradeoff versus an unenforced
 regression check, per this task's own instruction.
 
+**Follow-up, same day: the repo owner applied the change above directly
+in GitHub Settings, and also required `analyze-and-test`.** Before this,
+`main` had no classic branch protection rule at all — not just a missing
+`flutter_stripe pinned` check, but nothing configured, so
+`analyze-and-test` (`ci.yml`) wasn't required either. The owner created a
+protection rule for `main` with "Require status checks to pass before
+merging" and added both `flutter_stripe pinned` and `analyze-and-test`
+as required checks. The `analyze-and-test` addition was the owner's own
+call, made directly in the GitHub UI, not something this session
+determined was in scope or asked for — recorded here for completeness
+since it changes `main`'s actual protection state beyond what this
+decision's "change needed" section above called for.
+
 **D-16. Added `android-native-skip.yml` so a required `flutter_stripe
 pinned` check doesn't block docs-only (or otherwise non-Android) PRs
 forever.** Once D-15's required-check change was applied, the very next
