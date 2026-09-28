@@ -169,6 +169,32 @@ not by ease.
    scale this backlog item is about) still hasn't been run: GitHub
    Actions hard-caps a hosted-runner job at 6 hours, so it doesn't fit
    in one CI job at all. See D-13 for the full write-up, exact numbers,
-   and what's still missing. Still not making the fix-or-accept call
-   here — that's the product decision D-12 already deferred, now with
-   somewhat stronger and somewhat less reassuring evidence behind it.
+   and what's still missing.
+
+   **Closed, 2026-09-28: accepted as an Android platform constraint;
+   customer-facing copy corrected instead of implementing exact alarms.**
+   Decision (D-14): given real-elapsed delivery consistently landing at
+   the far edge of the ~1-hour inexact-alarm window (D-13), a "2 hours
+   before" reminder can arrive as late as ~1 hour before the
+   appointment in the worst case — roughly half the promised lead time,
+   not a rare edge case. Exact alarms (`SCHEDULE_EXACT_ALARM` /
+   `USE_EXACT_ALARM`) would fix this but cost a permission prompt (real
+   user friction, possible Play Store policy scrutiny for a non-alarm-
+   clock app) that isn't justified without real usage data showing
+   customer harm — so exact alarms stay explicitly deferred, not
+   implemented. What *did* change: this app's own UI, copy and code
+   comments were audited for anywhere they stated or implied a fixed,
+   precise "2 hours before" promise. That audit (see D-14) found no
+   customer-facing screen, notification body, or in-app text anywhere
+   in the app that states a specific lead time at all — the "2 hours
+   before" figure only appeared in this decision log, the backlog, and
+   an internal scheduling-code comment, none of which a user ever sees.
+   The internal comment in `lib/services/reminder_scheduler.dart` (next
+   to `androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle`)
+   was rewritten to state the measured ~1-hour worst-case lateness
+   instead of understating it as "doesn't need to land to the second".
+   No customer-facing wording change was needed because none existed to
+   correct; if a confirmation screen, receipt, or FAQ copy stating a
+   specific reminder lead time is added in the future, it must say
+   "1-2 hours before" (or equivalent honest range) instead of a fixed
+   "2 hours before", per this measurement.

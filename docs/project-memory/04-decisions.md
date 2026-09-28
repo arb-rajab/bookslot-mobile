@@ -439,3 +439,65 @@ reminder — now looking like the *typical* real-elapsed outcome rather
 than a rare tail case — is acceptable, or whether this new evidence
 tips the balance toward `setWindow`/exact alarms, is a product call —
 not made here. See backlog #11.
+
+**D-14. Accepted the ~1-hour worst-case reminder lateness from D-12/D-13
+as an Android platform constraint; corrected customer-facing copy
+instead of implementing exact alarms.** D-13's two real-elapsed trials
+found actual delivery landing consistently at the far edge of the
+~1-hour inexact-alarm window, not near the front — meaning a "2 hours
+before" reminder can, in the realistic worst case, arrive with only
+about half its promised lead time (roughly 1 hour before the
+appointment instead of 2). That's frequent enough (confirmed at two
+different due-time scales, 3h and 4h, both real-elapsed) that it isn't
+a rare tail case for this backlog item's purposes.
+
+**Decision: accept it, don't implement exact alarms this session.**
+Exact alarms (`SCHEDULE_EXACT_ALARM`, or `USE_EXACT_ALARM` which Play
+reserves for alarm-clock/calendar apps) would fix the lateness, but
+`SCHEDULE_EXACT_ALARM` costs a real permission prompt — user friction,
+and possible Play Store policy scrutiny for an app that isn't an
+alarm-clock/calendar app — that isn't justified without real usage
+data showing customers are actually harmed by a ~1-hour-late reminder.
+This stays explicitly deferred pending such a signal; `setWindow` with
+a bounded window remains the other option on the table from D-10 if the
+call changes later.
+
+**What this session actually changed: an audit of every place the app
+states or implies a specific reminder lead time to a user, and a fix
+for the internal scheduling-code comment.** Searched `lib/` (all
+screens, `app_services.dart`, `reminder_scheduler.dart`), `README.md`,
+the Android manifest, and existing widget/integration tests for any
+wording that names a lead time. Result: **no customer-facing text in
+this app states "2 hours before" or any specific lead time at all.**
+`BookingConfirmationScreen` shows only the service name and the
+appointment's own start time; the scheduled notification's body is
+`'$serviceName is coming up soon.'` (no number); the Android
+notification channel description ("Reminds you ahead of an upcoming
+bookslot appointment") and `README.md`'s feature bullet ("Get a local
+reminder notification ahead of your appointment.") are both already
+number-free. No widget or integration test asserts a literal "2 hours
+before" (or similar) string as expected UI text either, so none needed
+updating. The "2 hours before" figure only ever appeared in this
+decision log, the backlog, CI scripts/workflow comments, and one
+scheduling-code comment in `reminder_scheduler.dart` — none of which a
+user sees. That comment (next to
+`androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle`)
+previously read "A reminder two hours out doesn't need to land to the
+second," which understated the actual lateness now measured; it's been
+rewritten to state the ~1-hour worst case directly and point at D-10/
+D-12/D-13/D-14. `leadTime`'s `Duration(hours: 2)` default itself is
+correct as-is (that's the real scheduling offset, unchanged) and needed
+no rename — only the surrounding comment was misleading, not the
+identifier.
+
+**Not silently missed, but also not found:** the search above covered
+this repo (`bookslot-mobile`) only, since this session's scope is
+copy/messaging-accuracy in this app. If bookslot's backend (a separate
+repo) sends its own confirmation emails/SMS naming a reminder lead
+time, that's outside this session's reach and unverified here. Within
+this repo, the search was exhaustive over all `.dart` files under
+`lib/`, `test/`, and `integration_test/`, plus `README.md` and the
+Android manifest — there is no localization/`.arb` file, FAQ screen, or
+settings screen in this app at all to have missed. If either is added
+later, it must phrase reminder timing as a range ("1-2 hours before" or
+equivalent), not a fixed point, per this measurement. See backlog #11.

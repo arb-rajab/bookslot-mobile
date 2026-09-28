@@ -73,8 +73,13 @@ class ReminderScheduler {
       // Android 14 no longer pre-grants and the user must enable in
       // Settings (without it zonedSchedule throws
       // `exact_alarms_not_permitted`), or USE_EXACT_ALARM, which Play
-      // reserves for alarm-clock/calendar apps. A reminder two hours out
-      // doesn't need to land to the second. See 04-decisions.md D-10.
+      // reserves for alarm-clock/calendar apps. This isn't just "not to
+      // the second": measured worst-case delivery is up to ~1 hour after
+      // the scheduled time (AlarmManager's inexact window is capped at
+      // 1 hour, and real-elapsed trials landed delivery at the far edge
+      // of that window, not near the front). Accepted as a platform
+      // constraint rather than adding the exact-alarm permission prompt.
+      // See 04-decisions.md D-10, D-12, D-13, D-14 and backlog #11.
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
