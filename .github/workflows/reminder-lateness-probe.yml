@@ -5,10 +5,27 @@ name: Reminder lateness probe
 # closer to the real product's "2 hours before, booked days ahead" than the
 # ~4 minute case D-11 happened to measure? Not a per-PR gate — dispatch it
 # by hand when the measurement is needed. See
-# .github/scripts/reminder-lateness-check.sh for the two trial modes
-# ("real": a moderate scale, waited out in real elapsed time; "jump": a
-# multi-day scale, reached by jumping the emulator's clock forward, which is
-# NOT equivalent to a real multi-day wait — see that script's header).
+# .github/scripts/reminder-lateness-check.sh for the trial modes
+# ("real": waited out in real elapsed time, at whatever due-time scale is
+# passed in; "jump": a multi-day scale, reached by jumping the emulator's
+# clock forward, which is NOT equivalent to a real multi-day wait — see
+# that script's header).
+#
+# `long_real_*` drives a *third*, separate "real" mode invocation at the
+# longest due-time scale that can still finish inside one CI job: GitHub
+# Actions hard-caps a GitHub-hosted runner job at 6 hours of execution time
+# regardless of `timeout-minutes` (a true ~70-hour real-elapsed wait, the
+# D-12/backlog-#11 clock-jumped trial's actual scale, cannot fit in a
+# single job at all — a real multi-day wait would need to span multiple
+# jobs/days, which is out of scope for this one-off measurement). Defaults
+# to 0 trials so a plain dispatch behaves exactly as before; set
+# `long_real_trials=1` (and set `real_trials`/`jump_trials` to `0` to stay
+# well under the 6-hour cap in the same run) to actually run it. See D-13
+# (docs/project-memory/04-decisions.md) for what the first two runs of
+# this found — delivery landing at the very far edge of the ~1-hour
+# window, not near the front like D-12's clock-jumped trial — and for why
+# the grace default here needs real margin past that window, not just
+# equal to it.
 
 on:
   workflow_dispatch:
@@ -28,6 +45,15 @@ on:
       jump_trials:
         description: 'How many times to repeat the clock-jump trial'
         default: '1'
+      long_real_due_in_minutes:
+        description: 'Long real-elapsed trial: minutes from "now" until due (default 180 = 3h; see D-13 for why this and the grace default below are sized the way they are)'
+        default: '180'
+      long_real_grace_seconds:
+        description: 'Long real-elapsed trial: how long past the due time to keep waiting for delivery before calling it a failure. D-13''s first run set this equal to the observed ~3600s (1h) AlarmManager window width, with no margin, and the check hit its deadline and reported FAIL a few seconds before diagnostics confirmed the reminder had actually just been shown — real delivery in these trials lands at the very edge of the window, not safely inside it. Keep this comfortably larger than the window (default 2h, i.e. 2x the observed 1h cap) so a real PASS can actually be observed.'
+        default: '7200'
+      long_real_trials:
+        description: 'How many times to repeat the long real-elapsed trial (0 = skip; this is what actually opts into it)'
+        default: '0'
 
 concurrency:
   group: reminder-lateness-probe-${{ github.ref }}
@@ -37,7 +63,10 @@ jobs:
   probe:
     name: Reminder lateness probe
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    # 355 min stays under GitHub-hosted runners' 6h (360 min) hard job-time
+    # cap even in the worst case for the long-real trial (due time + full
+    # grace period + build/boot overhead for all three probe APKs).
+    timeout-minutes: 355
     # inputs.* is only populated for workflow_dispatch; the pull_request
     # trigger (see above) falls back to the same defaults.
     env:
@@ -46,6 +75,9 @@ jobs:
       JUMP_LEEWAY_SECONDS: ${{ inputs.jump_leeway_seconds || '600' }}
       REAL_TRIALS: ${{ inputs.real_trials || '2' }}
       JUMP_TRIALS: ${{ inputs.jump_trials || '1' }}
+      LONG_REAL_DUE_IN_MINUTES: ${{ inputs.long_real_due_in_minutes || '180' }}
+      LONG_REAL_GRACE_SECONDS: ${{ inputs.long_real_grace_seconds || '7200' }}
+      LONG_REAL_TRIALS: ${{ inputs.long_real_trials || '0' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,6 +105,12 @@ jobs:
             --dart-define=DUE_IN_MINUTES="$JUMP_DUE_IN_MINUTES"
           cp build/app/outputs/flutter-apk/app-debug.apk build/lateness-probe-jump.apk
 
+      - name: Build long-real-trial probe APK
+        run: |
+          flutter build apk --debug -t integration_test/lateness_probe_main.dart \
+            --dart-define=DUE_IN_MINUTES="$LONG_REAL_DUE_IN_MINUTES"
+          cp build/app/outputs/flutter-apk/app-debug.apk build/lateness-probe-longreal.apk
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -98,3 +136,4 @@ jobs:
           script: |
             .github/scripts/reminder-lateness-check.sh build/lateness-probe-real.apk real "$REAL_TRIALS"; echo "real trials exit=$?"
             .github/scripts/reminder-lateness-check.sh build/lateness-probe-jump.apk jump "$JUMP_TRIALS" "$JUMP_LEEWAY_SECONDS"; echo "jump trials exit=$?"
+            .github/scripts/reminder-lateness-check.sh build/lateness-probe-longreal.apk real "$LONG_REAL_TRIALS" "" "$LONG_REAL_GRACE_SECONDS"; echo "long real trials exit=$?"

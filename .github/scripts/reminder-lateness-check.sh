@@ -37,9 +37,9 @@
 # file is a single shell process throughout, so it's fine here.
 set -uo pipefail
 
-APK=${1:?usage: reminder-lateness-check.sh <probe apk> <real|jump> <trials> [jump_leeway_seconds]}
-MODE=${2:?usage: reminder-lateness-check.sh <probe apk> <real|jump> <trials> [jump_leeway_seconds]}
-TRIALS=${3:?usage: reminder-lateness-check.sh <probe apk> <real|jump> <trials> [jump_leeway_seconds]}
+APK=${1:?usage: reminder-lateness-check.sh <probe apk> <real|jump> <trials> [jump_leeway_seconds] [grace_seconds]}
+MODE=${2:?usage: reminder-lateness-check.sh <probe apk> <real|jump> <trials> [jump_leeway_seconds] [grace_seconds]}
+TRIALS=${3:?usage: reminder-lateness-check.sh <probe apk> <real|jump> <trials> [jump_leeway_seconds] [grace_seconds]}
 JUMP_LEEWAY_S=${4:-600}
 PKG=com.bookslot.bookslot_mobile
 TITLE='Upcoming appointment'
@@ -47,7 +47,11 @@ TITLE='Upcoming appointment'
 # minute due-time scale the AlarmManager window itself is ~11 minutes (see
 # backlog #11), so maxWhenElapsed can land well past due+480s. 1800s covers
 # that comfortably without costing much extra when delivery is on time.
-GRACE_S=1800
+# Overridable (5th arg) for a real-elapsed trial run at a scale large
+# enough that the default 1800s guess isn't a safe bound any more (a
+# several-hour due time, where Doze/App Standby could plausibly push
+# delivery later than the ~15-minute-scale trials ever observed).
+GRACE_S=${5:-1800}
 
 log() { echo "lateness-check[$MODE #$trial]: $*"; }
 summary() {
