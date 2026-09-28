@@ -501,3 +501,66 @@ Android manifest — there is no localization/`.arb` file, FAQ screen, or
 settings screen in this app at all to have missed. If either is added
 later, it must phrase reminder timing as a range ("1-2 hours before" or
 equivalent), not a fixed point, per this measurement. See backlog #11.
+
+**D-15. Verified `main`'s required status checks against PR #10 merging
+with a failing `android-native.yml` job — confirmed the regression tests
+from PR #6/#7 are not enforced, and could not change branch protection
+from this session.** PR #10's summary said the android-native check
+"isn't required for merge" and merged anyway despite it failing. This
+session set out to confirm that from the actual branch-protection
+config (not PR wording) and fix it if true.
+
+**What was confirmed, and how.** This session's GitHub access is the
+`mcp__github__*` MCP tool set only (direct `gh`/REST API calls are
+disallowed by session policy), and that tool set has no branch-protection
+or ruleset endpoint — no way to read or write `main`'s required status
+checks from here. Branch protection itself could not be inspected
+directly. As an indirect check, `pull_request_read get_check_runs` on
+PR #10 shows two checks on its head commit: `analyze-and-test`
+(`ci.yml`, Dart-only) with `conclusion: "success"`, and
+`flutter_stripe pinned` (`android-native.yml`) with
+`conclusion: "failure"` — yet the PR shows `merged: true`. GitHub
+refuses to merge (without an admin override) when a required check is
+failing, so a merge going through on a red `flutter_stripe pinned` is
+strong evidence that check is *not* currently a required status check on
+`main`. This matches PR #10's own summary; it wasn't describing some
+narrower non-blocking sub-step.
+
+**Which job actually carries the regression tests, precisely.**
+`android-native.yml` defines one job, `native` (matrix over
+`stripe_versions`, default `["pinned"]`), whose check name on a normal
+PR is always `flutter_stripe pinned` — the extra "try a future
+flutter_stripe version" rows from PR #5 only exist when someone manually
+dispatches the workflow with additional versions in `stripe_versions`;
+on an ordinary pull request only the `pinned` row ever runs, so the
+deliberately-optional evaluation job doesn't appear as a PR check at
+all. Both regression tests introduced across PR #6 (backlog #9,
+`integration_test/reminder_delivery_test.dart`, reminder scheduling/
+delivery) and PR #7 (backlog #10, `.github/scripts/reboot-reminder-check.sh`,
+reboot survival) run as steps inside that same single `native` job/
+`flutter_stripe pinned` check — via `run-integration-tests.sh` and
+`reboot-reminder-check.sh` respectively, both called from the "integration_test
+on emulator" step. There is exactly one check name to make required for
+both regressions: `flutter_stripe pinned`. `continue-on-error` on that
+job's steps is `false` whenever `matrix.stripe == 'pinned'` (true only
+for a manually-dispatched candidate version), so a real regression in
+either test already fails this check's conclusion — the only miss is
+that nothing on `main` currently requires that conclusion to be green
+before merging.
+
+**Change needed, and why this session didn't make it.** `flutter_stripe
+pinned` needs to be added to `main`'s required status checks (repo
+Settings → Branches → branch protection rule for `main` → "Require
+status checks to pass" → add `flutter_stripe pinned`), leaving
+`analyze-and-test` as-is and not adding any per-dispatch candidate-stripe
+check names (they don't appear on PRs to add anyway). This session
+could not make that change itself — no available tool reaches branch
+protection, and this session was directed not to fall back to direct
+API/CLI access for it — so the repo owner needs to apply it manually via
+the settings page above. **Tradeoff to flag once this is required:** the
+known Android system-process flakiness in this job (PR #9, PR #10) will
+now occasionally block a legitimate merge until a re-run clears it, not
+just show a red check that could be ignored. That flakiness is out of
+this session's scope to fix (tracked separately) — but an occasional
+flaky retry gating merge is the intended tradeoff versus an unenforced
+regression check, per this task's own instruction.
