@@ -10,10 +10,15 @@ class BookingConfirmationScreen extends StatelessWidget {
     super.key,
     required this.service,
     required this.slot,
+    this.notificationsEnabled = true,
   });
 
   final Service service;
   final Slot slot;
+
+  /// False when the user declined notification permission: the booking is
+  /// still confirmed, but the on-device reminder won't be shown.
+  final bool notificationsEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +38,19 @@ class BookingConfirmationScreen extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             Text(DateFormat.yMMMEd().add_jm().format(slot.startsAt.toLocal())),
+            if (!notificationsEnabled) ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  "Notifications are off, so you won't get an on-device "
+                  'reminder for this appointment. You can turn them on in '
+                  "your phone's notification settings.",
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () => Navigator.of(context).pushAndRemoveUntil(

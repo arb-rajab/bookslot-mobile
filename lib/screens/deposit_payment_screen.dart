@@ -35,6 +35,7 @@ class _DepositPaymentScreenState extends State<DepositPaymentScreen> {
   bool _processing = false;
   String? _error;
   bool _confirmed = false;
+  bool _notificationsEnabled = true;
 
   Future<void> _pay() async {
     setState(() {
@@ -74,7 +75,7 @@ class _DepositPaymentScreenState extends State<DepositPaymentScreen> {
           startsAt: widget.slot.startsAt,
         ),
       );
-      await services.reminders.scheduleForAppointment(
+      _notificationsEnabled = await services.reminders.scheduleForAppointment(
         appointmentId: widget.booking.appointmentId,
         serviceName: widget.service.name,
         startsAt: widget.slot.startsAt,
@@ -96,6 +97,7 @@ class _DepositPaymentScreenState extends State<DepositPaymentScreen> {
       return BookingConfirmationScreen(
         service: widget.service,
         slot: widget.slot,
+        notificationsEnabled: _notificationsEnabled,
       );
     }
 

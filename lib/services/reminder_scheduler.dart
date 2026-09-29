@@ -38,7 +38,14 @@ class ReminderScheduler {
   int _notificationId(String appointmentId) =>
       appointmentId.hashCode & 0x7fffffff;
 
-  Future<void> scheduleForAppointment({
+  /// Schedules the reminder and returns whether the user will actually see
+  /// it: `false` only when the OS reported notifications as disabled
+  /// (declined POST_NOTIFICATIONS). The reminder is still scheduled in that
+  /// case, and Android silently suppresses its display, so callers use this
+  /// to tell the user. Returns `true` when notifications are enabled, when
+  /// the state is unknown (iOS, where the Android permission API doesn't
+  /// apply), or when there was nothing to schedule.
+  Future<bool> scheduleForAppointment({
     required String appointmentId,
     required String serviceName,
     required DateTime startsAt,
@@ -46,7 +53,7 @@ class ReminderScheduler {
   }) async {
     final fireAt = startsAt.subtract(leadTime);
     if (fireAt.isBefore(DateTime.now())) {
-      return;
+      return true;
     }
 
     // Android 13+ shows no notifications until the user grants
@@ -54,7 +61,7 @@ class ReminderScheduler {
     // here, the first time there's a reminder worth showing. Once the user
     // has answered, this returns without prompting. It's a no-op on older
     // Android, and null (skipped) on iOS.
-    await _plugin
+    final notificationsEnabled = await _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >()
@@ -84,6 +91,7 @@ class ReminderScheduler {
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
+    return notificationsEnabled != false;
   }
 
   Future<void> cancelForAppointment(String appointmentId) =>
