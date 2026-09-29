@@ -75,11 +75,19 @@ class _DepositPaymentScreenState extends State<DepositPaymentScreen> {
           startsAt: widget.slot.startsAt,
         ),
       );
-      _notificationsEnabled = await services.reminders.scheduleForAppointment(
-        appointmentId: widget.booking.appointmentId,
-        serviceName: widget.service.name,
-        startsAt: widget.slot.startsAt,
-      );
+
+      // The payment has already gone through, so a failure scheduling the
+      // local reminder must never be reported as a payment failure (the
+      // customer might pay again). Treat it like "notifications off".
+      try {
+        _notificationsEnabled = await services.reminders.scheduleForAppointment(
+          appointmentId: widget.booking.appointmentId,
+          serviceName: widget.service.name,
+          startsAt: widget.slot.startsAt,
+        );
+      } catch (_) {
+        _notificationsEnabled = false;
+      }
 
       setState(() => _confirmed = true);
     } on StripeException {
