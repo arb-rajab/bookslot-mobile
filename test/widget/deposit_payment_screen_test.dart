@@ -89,6 +89,24 @@ class _FakeReminderScheduler extends ReminderScheduler {
   }
 }
 
+/// A [LocalBookingsStore] whose `add` can be made to throw, standing in for a
+/// secure-storage / SharedPreferences failure after the payment succeeded.
+class _FakeBookingsStore extends LocalBookingsStore {
+  _FakeBookingsStore(super.prefs, {this.throwOnAdd = false});
+
+  final bool throwOnAdd;
+  int addCalls = 0;
+
+  @override
+  Future<void> add(LocalBooking booking) async {
+    addCalls++;
+    if (throwOnAdd) {
+      throw PlatformException(code: 'storage_failed');
+    }
+    return super.add(booking);
+  }
+}
+
 const _service = Service(
   id: 'svc-1',
   name: 'Small Tattoo Session',
@@ -166,6 +184,7 @@ void _stubStripe(WidgetTester tester, {bool failPresent = false}) {
 Future<Widget> _wrap({
   required ReminderScheduler reminders,
   required String confirmStatus,
+  LocalBookingsStore Function(SharedPreferences prefs)? bookingsStore,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStoragePlatform.instance = _FakeSecureStoragePlatform();
@@ -183,7 +202,7 @@ Future<Widget> _wrap({
   return Provider<AppServices>(
     create: (_) => AppServices(
       api: api,
-      bookingsStore: LocalBookingsStore(prefs),
+      bookingsStore: bookingsStore?.call(prefs) ?? LocalBookingsStore(prefs),
       reminders: reminders,
     ),
     child: MaterialApp(
@@ -216,6 +235,34 @@ void main() {
       expect(find.text(failureMessage), findsNothing);
       expect(find.text('Booked!'), findsOneWidget);
       expect(find.text(_notificationsOffMessage), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'lands on Booked! when saving the booking locally throws after the '
+    'payment already succeeded',
+    (tester) async {
+      _stubStripe(tester);
+      final reminders = _FakeReminderScheduler();
+      late _FakeBookingsStore store;
+      await tester.pumpWidget(
+        await _wrap(
+          reminders: reminders,
+          confirmStatus: 'confirmed',
+          bookingsStore: (prefs) =>
+              store = _FakeBookingsStore(prefs, throwOnAdd: true),
+        ),
+      );
+
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+
+      expect(store.addCalls, 1);
+      expect(find.text(failureMessage), findsNothing);
+      expect(find.text('Booked!'), findsOneWidget);
+      // The reminder is independent of local storage, so it still runs.
+      expect(reminders.scheduleCalls, 1);
+      expect(find.text(_notificationsOffMessage), findsNothing);
     },
   );
 

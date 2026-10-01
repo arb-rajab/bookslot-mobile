@@ -67,18 +67,25 @@ class _DepositPaymentScreenState extends State<DepositPaymentScreen> {
         return;
       }
 
-      await services.bookingsStore.add(
-        LocalBooking(
-          appointmentId: widget.booking.appointmentId,
-          manageToken: widget.booking.manageToken,
-          serviceName: widget.service.name,
-          startsAt: widget.slot.startsAt,
-        ),
-      );
+      // The payment has already gone through, so a failure saving the
+      // booking locally must never be reported as a payment failure (the
+      // customer might pay again). The booking is confirmed server-side
+      // either way; the worst case is it's missing from "My bookings".
+      try {
+        await services.bookingsStore.add(
+          LocalBooking(
+            appointmentId: widget.booking.appointmentId,
+            manageToken: widget.booking.manageToken,
+            serviceName: widget.service.name,
+            startsAt: widget.slot.startsAt,
+          ),
+        );
+      } catch (_) {
+        // Deliberately swallowed; see above.
+      }
 
-      // The payment has already gone through, so a failure scheduling the
-      // local reminder must never be reported as a payment failure (the
-      // customer might pay again). Treat it like "notifications off".
+      // Same reasoning for the local reminder: treat a scheduling failure
+      // like "notifications off".
       try {
         _notificationsEnabled = await services.reminders.scheduleForAppointment(
           appointmentId: widget.booking.appointmentId,
