@@ -1,0 +1,82 @@
+name: Security
+
+# Security-tooling parity with the rest of the portfolio (gitleaks, CodeQL,
+# osv-scanner). Deliberately a separate workflow from ci.yml so the required
+# `analyze-and-test` and `flutter_stripe pinned` checks are untouched.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so newly published advisories surface even when the repo is quiet.
+    - cron: "17 5 * * 1"
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so leaked-then-deleted secrets are still caught.
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # CodeQL has no Dart language pack (supported: actions, c-cpp, csharp, go,
+  # java-kotlin, javascript-typescript, python, ruby, rust, swift), so the
+  # Dart app code under lib/ is NOT covered by CodeQL; flutter analyze in
+  # ci.yml remains its only static analysis. What CodeQL scans here is this
+  # repo's own workflows (language `actions`) and the shell they inline.
+  #
+  # Native glue is deliberately not scanned:
+  #   - Android: java-kotlin with `build-mode: none` was tried and extracts
+  #     nothing (Kotlin needs a real compile, so CodeQL fails with "could not
+  #     process any code written in Java/Kotlin"). A manual build would mean a
+  #     full Flutter+Gradle build per PR (~5 min) to scan a single
+  #     `class MainActivity : FlutterFragmentActivity()` line.
+  #   - iOS: AppDelegate/SceneDelegate are a few lines of template Swift, and
+  #     CodeQL Swift needs a macOS runner and a full xcodebuild.
+  # Revisit if real native code is added under android/ or ios/.
+  codeql:
+    name: CodeQL (actions)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: actions
+          build-mode: none
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:actions"
+
+  # pubspec.lock is a supported osv-scanner lockfile (Pub ecosystem), so this
+  # covers every Dart/Flutter package, direct and transitive. The Android
+  # Gradle dependencies have no committed lockfile and so aren't covered.
+  dependency-scan:
+    name: Dependency scanning (osv-scanner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.6.0
+        with:
+          scan-args: |-
+            --lockfile=pubspec.lock
