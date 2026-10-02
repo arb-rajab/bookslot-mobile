@@ -7,6 +7,7 @@ import 'package:bookslot_mobile/screens/my_bookings_screen.dart';
 import 'package:bookslot_mobile/services/local_bookings_store.dart';
 import 'package:bookslot_mobile/services/reminder_scheduler.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,12 +64,19 @@ class _FakeSecureStoragePlatform extends FlutterSecureStoragePlatform {
 /// flow's `reminders.cancelForAppointment` call can be exercised without
 /// that platform dependency; it's not what's under test here.
 class _FakeReminderScheduler extends ReminderScheduler {
-  _FakeReminderScheduler() : super(FlutterLocalNotificationsPlugin());
+  _FakeReminderScheduler({this.throwOnCancel = false})
+    : super(FlutterLocalNotificationsPlugin());
 
+  final bool throwOnCancel;
   final cancelledAppointmentIds = <String>[];
+  int cancelCalls = 0;
 
   @override
   Future<void> cancelForAppointment(String appointmentId) async {
+    cancelCalls++;
+    if (throwOnCancel) {
+      throw PlatformException(code: 'notifications_unavailable');
+    }
     cancelledAppointmentIds.add(appointmentId);
   }
 }
@@ -144,6 +152,44 @@ void main() {
 
       expect(find.textContaining('cancelled'), findsOneWidget);
       expect(reminders.cancelledAppointmentIds, ['apt-1']);
+    },
+  );
+
+  testWidgets(
+    'still reflects the successful backend cancellation when cancelling the '
+    'local reminder throws',
+    (tester) async {
+      final mock = MockClient((request) async {
+        if (request.method == 'POST') {
+          expect(
+            request.url.path,
+            '/api/bookings/manage/manage-token-1/cancel',
+          );
+          return _statusResponse('cancelled');
+        }
+        return _statusResponse('confirmed');
+      });
+      final api = BookslotApiClient(
+        baseUrl: 'https://demo.test/api',
+        tenantSlug: 'demo-studio',
+        httpClient: mock,
+      );
+      final reminders = _FakeReminderScheduler(throwOnCancel: true);
+
+      await tester.pumpWidget(await _wrap(api, reminders: reminders));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel booking'));
+      await tester.pumpAndSettle();
+
+      // The reminder-cancel failure must never block the UI from reflecting
+      // the already-successful backend cancellation (no stuck spinner, no
+      // false "Cancellation failed" dialog).
+      expect(reminders.cancelCalls, 1);
+      expect(find.text('Cancellation failed'), findsNothing);
+      expect(find.textContaining('cancelled'), findsOneWidget);
     },
   );
 
