@@ -77,7 +77,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final services = context.read<AppServices>();
     try {
       final status = await services.api.cancelBooking(local.manageToken);
-      await services.reminders.cancelForAppointment(local.appointmentId);
+      // The backend cancellation has already succeeded, so a failure
+      // cancelling the local reminder must never block reflecting that in
+      // the UI (the customer would otherwise see a stuck spinner on an
+      // already-cancelled booking). Same reasoning as deposit_payment_screen's
+      // own local-storage/reminder handling.
+      try {
+        await services.reminders.cancelForAppointment(local.appointmentId);
+      } catch (_) {
+        // Deliberately swallowed; see above. Worst case a stale reminder
+        // fires for a cancelled booking, which is harmless.
+      }
       if (!mounted) {
         return;
       }
