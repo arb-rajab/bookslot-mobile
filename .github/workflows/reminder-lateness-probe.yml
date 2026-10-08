@@ -59,6 +59,10 @@ concurrency:
   group: reminder-lateness-probe-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege for the GITHUB_TOKEN; jobs that need more declare it themselves.
+permissions:
+  contents: read
+
 jobs:
   probe:
     name: Reminder lateness probe
