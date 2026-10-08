@@ -1,0 +1,6 @@
+# Known gitleaks false positives, one fingerprint per finding (commit:file:rule:line).
+# The scheduled Security run scans full history, so these fail it every week.
+# Each entry skips that one finding only; anything new still fails the scan.
+
+# Fake Stripe PaymentIntent client secret in a widget-test fixture (pi_123_secret_456).
+0ee3433a08249efa6cb48ebf60fa1ffc3f6f9114:test/widget/deposit_payment_screen_test.dart:generic-api-key:114
