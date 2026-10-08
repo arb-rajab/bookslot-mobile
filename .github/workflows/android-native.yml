@@ -34,10 +34,6 @@ concurrency:
   group: android-native-${{ github.ref }}
   cancel-in-progress: true
 
-# Least privilege for the GITHUB_TOKEN; jobs that need more declare it themselves.
-permissions:
-  contents: read
-
 jobs:
   native:
     name: flutter_stripe ${{ matrix.stripe }}
