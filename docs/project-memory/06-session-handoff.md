@@ -467,3 +467,29 @@ plugin source, the cancelled one is removed from the saved list);
 Doze/battery-saver timing; iOS; release builds. The Claude sandbox still
 has no Android SDK or KVM. Only Dart-side checks ran locally (`dart
 format`, `flutter analyze`, `flutter test` 20/20).
+
+## 2026-10-08: the emulator hang recurred once (PR #31, workflow-only change)
+
+PR #31 only adds a top-level `permissions: contents: read` to four
+workflows; nothing in `android-native.yml`'s job uses the token. Because
+the PR edits `android-native.yml`, the real native job ran on it.
+
+- **Attempt 1 (run `37835102711`):** the native build passed.
+  `reminder_delivery_test` logged `notificationsEnabled=false,
+  canScheduleExact=false`, the helper logged `tapped Allow at 160,360`, and
+  focus returned to `MainActivity` at 20:01:24. Nothing more was logged
+  until the 15-minute `timeout` hit (exit 124). The test's own 60 s
+  scheduling guard never fired. At teardown, logcat shows `app died, no
+  saved state`, and the emulator printed `Failed to find ColorBuffer`.
+  This is the same shape as attempt 2 in "two unexplained emulator hangs"
+  above, except that this time the tap was logged.
+- **Attempt 2 (re-run):** the job never reached the emulator. Gradle
+  plugin resolution got `429 Too Many Requests` from
+  `repo.maven.apache.org` twice.
+- **Control:** `workflow_dispatch` of the same workflow on `main`
+  (`44d93a9`, run `37838787241`) passed.
+
+**Root cause: still not established.** The scheduling guard not firing
+suggests the Dart side was stalled (not just waiting on a prompt), so a
+next step is a per-step log line inside `reminder_delivery_test` after the
+permission request returns.
