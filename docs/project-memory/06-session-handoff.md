@@ -505,3 +505,25 @@ branch that adds only that block, and compare with a dispatch on `main`.
 suggests the Dart side was stalled (not just waiting on a prompt), so a
 next step is a per-step log line inside `reminder_delivery_test` after the
 permission request returns.
+
+## 2026-10-08 (later): the permissions block goes back into `android-native.yml`
+
+Decision: add the top-level `permissions: contents: read`. The evidence
+says the block does not cause the emulator hang:
+
+- **Dispatch with only the block** (branch `claude/standing-loop-maintenance-jya4eb`,
+  `96c7196`, run `37847762509`): passed.
+- **The same hang happened without the block.** Run `37304234070`
+  (the `actions/checkout` 4→7 Dependabot PR, 2026-10-05, before any permissions
+  change) timed out in the emulator step with exit 124, and the two hangs
+  on PR #6's CI (2026-09-26, above) predate it too.
+- **The `main` control dispatched just before (run `37847416493`) is not
+  evidence either way:** it failed in `assembleDebug` because the NDK
+  download was corrupt (`Error on ZipFile unknown archive`), before the
+  emulator started.
+
+So the hang is an intermittent emulator/test problem that shows up more
+often on `pull_request` runs, not a token-permission effect. Root cause
+is still open; the next step is still a per-step log line in
+`reminder_delivery_test` after the permission request returns. If the PR
+that adds the block hangs, re-run it once rather than reverting the block.

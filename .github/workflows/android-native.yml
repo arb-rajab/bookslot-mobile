@@ -30,6 +30,10 @@ on:
         description: 'JSON list of flutter_stripe versions ("pinned" = as committed)'
         default: '["pinned"]'
 
+# Least privilege for the GITHUB_TOKEN; no step in this job uses it.
+permissions:
+  contents: read
+
 concurrency:
   group: android-native-${{ github.ref }}
   cancel-in-progress: true
