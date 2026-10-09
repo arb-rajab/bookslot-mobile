@@ -41,6 +41,6 @@ permissions:
 jobs:
   native:
     name: flutter_stripe pinned
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "No Android-native-affecting files changed; skipping the real build/emulator job."

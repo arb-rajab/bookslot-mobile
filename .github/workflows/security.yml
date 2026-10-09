@@ -22,7 +22,7 @@ permissions:
 jobs:
   gitleaks:
     name: Secret scanning (gitleaks)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,7 +50,7 @@ jobs:
   # Revisit if real native code is added under android/ or ios/.
   codeql:
     name: CodeQL (actions)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write
@@ -72,7 +72,7 @@ jobs:
   # Gradle dependencies have no committed lockfile and so aren't covered.
   dependency-scan:
     name: Dependency scanning (osv-scanner)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 

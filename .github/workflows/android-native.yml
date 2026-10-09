@@ -41,7 +41,7 @@ concurrency:
 jobs:
   native:
     name: flutter_stripe ${{ matrix.stripe }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
