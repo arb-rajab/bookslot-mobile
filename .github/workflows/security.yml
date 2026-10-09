@@ -23,6 +23,7 @@ jobs:
   gitleaks:
     name: Secret scanning (gitleaks)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,6 +52,7 @@ jobs:
   codeql:
     name: CodeQL (actions)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
       security-events: write
@@ -73,6 +75,7 @@ jobs:
   dependency-scan:
     name: Dependency scanning (osv-scanner)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
