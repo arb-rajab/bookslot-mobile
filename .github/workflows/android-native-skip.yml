@@ -42,5 +42,6 @@ jobs:
   native:
     name: flutter_stripe pinned
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - run: echo "No Android-native-affecting files changed; skipping the real build/emulator job."
